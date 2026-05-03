@@ -1,9 +1,21 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
   app:
     image: ${GHCR_IMAGE}
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/app
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
@@ -28,3 +40,5 @@ services:
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

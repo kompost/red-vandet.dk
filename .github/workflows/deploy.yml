@@ -34,6 +34,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Copy config files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: "docker-compose.yml,Caddyfile"
+          target: /opt/red-vandet
+
       - name: Deploy to Hetzner
         uses: appleboy/ssh-action@v1
         with:
