@@ -5,4 +5,4 @@ echo "Running database migrations..."
 node_modules/.bin/prisma migrate deploy
 
 echo "Starting server..."
-exec node dist/server/index.mjs
+exec node .output/server/index.mjs

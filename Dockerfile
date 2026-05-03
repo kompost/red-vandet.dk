@@ -26,7 +26,7 @@ COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/src/generated ./src/generated
 
 COPY entrypoint.sh ./
