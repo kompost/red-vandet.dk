@@ -45,6 +45,34 @@ Run a single test file: `pnpm vitest run src/path/to/file.test.ts`
 
 **Linting/formatting**: Biome with tab indentation and double quotes for JS/TS. Only processes files under `src/` and a few config files; `src/routeTree.gen.ts` and `src/styles.css` are excluded.
 
+## Deployment
+
+Push to `main` triggers `.github/workflows/deploy.yml`:
+1. Builds a Docker image and pushes to `ghcr.io/<owner>/red-vandet.dk:latest`
+2. SSHes into the Hetzner server, pulls the new image, runs `prisma migrate deploy`, restarts via Docker Compose
+
+**Server setup** (one-time, on the Hetzner box):
+```bash
+mkdir -p /opt/red-vandet && cd /opt/red-vandet
+# Create .env with:
+#   GHCR_IMAGE=ghcr.io/<github-owner>/red-vandet.dk:latest
+#   POSTGRES_PASSWORD=<strong-password>
+#   BETTER_AUTH_SECRET=<from: pnpm dlx @better-auth/cli secret>
+# Copy docker-compose.yml from the repo here
+docker compose up -d
+```
+
+**GitHub Secrets required:**
+
+| Secret | Description |
+|---|---|
+| `HETZNER_HOST` | Server IP or hostname |
+| `HETZNER_USER` | SSH user |
+| `HETZNER_SSH_KEY` | Private SSH key for that user |
+| `GHCR_TOKEN` | GitHub PAT with `read:packages` scope (for server to pull images) |
+
+`GITHUB_TOKEN` (auto-provided by Actions) is used by CI to push the image. `docker-compose.yml` on the server reads `GHCR_IMAGE`, `POSTGRES_PASSWORD`, and `BETTER_AUTH_SECRET` from `/opt/red-vandet/.env`.
+
 ## Key patterns
 
 - **Server functions**: Use `createServerFn` from `@tanstack/react-start` for server-side logic called from components
