@@ -42,6 +42,28 @@ function Contact() {
                     Send besked
                 </button>
             </form>
+
+            <div className="mt-20">
+                <p className="mb-6 font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">Bestyrelsen</p>
+                <ul className="flex flex-col divide-y divide-border/40">
+                    {[
+                        'Bo Asmus Kjeldgaard',
+                        'Jens Christian Refsgaard',
+                        'Jens Andersen',
+                        'Tommy Abraham Mostrup',
+                        'Stig Markager',
+                        'Ib Larsen',
+                        'Erik Arvin',
+                    ].map((name, i) => (
+                        <li key={name} className="flex items-center gap-4 py-4">
+                            <span className="font-mono text-xs text-[var(--sea-ink-soft)] w-5 shrink-0">
+                                {String(i + 1).padStart(2, '0')}
+                            </span>
+                            <span className="text-lg font-medium text-[var(--sea-ink)]">{name}</span>
+                        </li>
+                    ))}
+                </ul>
+            </div>
         </main>
     )
 }

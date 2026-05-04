@@ -1,6 +1,12 @@
 red-vandet.dk {
-    # Caddy sørger selv for HTTPS og certifikater nu
-    reverse_proxy app:3000
+    handle /documents/* {
+        root * /srv
+        file_server browse
+    }
+
+    handle {
+        reverse_proxy app:3000
+    }
 }
 
 # Valgfrit: viderestil www til din hovedside
