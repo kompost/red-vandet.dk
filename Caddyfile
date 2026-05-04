@@ -1,3 +1,10 @@
-{$DOMAIN} {
-	reverse_proxy app:3000
+red-vandet.dk {
+    # Caddy sørger selv for HTTPS og certifikater nu
+    reverse_proxy app:3000
 }
+
+# Valgfrit: viderestil www til din hovedside
+www.red-vandet.dk {
+    redir https://red-vandet.dk{uri}
+}
+
