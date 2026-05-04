@@ -20,6 +20,8 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/app
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+    volumes:
+      - /opt/red-vandet/documents:/documents:ro
     depends_on:
       db:
         condition: service_healthy
