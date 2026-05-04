@@ -10,8 +10,13 @@ function Home() {
                 <img
                     src="/logo_full.png"
                     alt="Red Vandet"
-                    className="mb-4 w-[calc(100vw-3rem)] max-w-[600px]"
+                    className="mb-10 w-[calc(100vw-3rem)] max-w-[600px]"
                 />
+                <div className="flex items-center gap-3 rounded-full border border-border/50 bg-secondary/40 px-5 py-2.5 backdrop-blur-sm">
+                    <span className="text-xl">🚧</span>
+                    <span className="font-mono text-sm tracking-wide text-[var(--sea-ink-soft)]">Under konstruktion</span>
+                    <span className="text-xl">🚧</span>
+                </div>
             </section>
         </main>
     )
