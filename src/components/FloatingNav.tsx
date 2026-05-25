@@ -4,7 +4,6 @@ import { ArrowUpRight, Home, Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 const NAV_ITEMS = [
-    { label: 'Red Vandet', path: '/red-vandet' },
     { label: 'Kontakt', path: '/contact' },
     { label: 'Udgivelser', path: '/knowledge' },
 ]
