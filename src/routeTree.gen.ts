@@ -10,14 +10,21 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RedVandetRouteImport } from './routes/red-vandet'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as KnowledgeRouteImport } from './routes/knowledge'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const RedVandetRoute = RedVandetRouteImport.update({
   id: '/red-vandet',
   path: '/red-vandet',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KnowledgeRoute = KnowledgeRouteImport.update({
@@ -28,6 +35,11 @@ const KnowledgeRoute = KnowledgeRouteImport.update({
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,44 +55,68 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/contact': typeof ContactRoute
   '/knowledge': typeof KnowledgeRoute
+  '/login': typeof LoginRoute
   '/red-vandet': typeof RedVandetRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/contact': typeof ContactRoute
   '/knowledge': typeof KnowledgeRoute
+  '/login': typeof LoginRoute
   '/red-vandet': typeof RedVandetRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/contact': typeof ContactRoute
   '/knowledge': typeof KnowledgeRoute
+  '/login': typeof LoginRoute
   '/red-vandet': typeof RedVandetRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/contact' | '/knowledge' | '/red-vandet' | '/api/auth/$'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/contact'
+    | '/knowledge'
+    | '/login'
+    | '/red-vandet'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/contact' | '/knowledge' | '/red-vandet' | '/api/auth/$'
+  to:
+    | '/'
+    | '/admin'
+    | '/contact'
+    | '/knowledge'
+    | '/login'
+    | '/red-vandet'
+    | '/api/auth/$'
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/contact'
     | '/knowledge'
+    | '/login'
     | '/red-vandet'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   ContactRoute: typeof ContactRoute
   KnowledgeRoute: typeof KnowledgeRoute
+  LoginRoute: typeof LoginRoute
   RedVandetRoute: typeof RedVandetRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -92,6 +128,13 @@ declare module '@tanstack/react-router' {
       path: '/red-vandet'
       fullPath: '/red-vandet'
       preLoaderRoute: typeof RedVandetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/knowledge': {
@@ -106,6 +149,13 @@ declare module '@tanstack/react-router' {
       path: '/contact'
       fullPath: '/contact'
       preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -127,8 +177,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   ContactRoute: ContactRoute,
   KnowledgeRoute: KnowledgeRoute,
+  LoginRoute: LoginRoute,
   RedVandetRoute: RedVandetRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
