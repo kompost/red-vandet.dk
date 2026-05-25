@@ -41,11 +41,10 @@ export default function FloatingNav() {
                             <Link
                                 key={item.path}
                                 to={item.path}
-                                className={`px-3 py-2 text-xs font-medium tracking-wide transition-colors rounded-full ${
-                                    location.pathname === item.path
+                                className={`px-3 py-2 text-xs font-medium tracking-wide transition-colors rounded-full ${location.pathname === item.path
                                         ? 'text-primary-foreground bg-primary'
                                         : 'text-muted-foreground hover:text-foreground'
-                                }`}
+                                    }`}
                             >
                                 {item.label}
                             </Link>
@@ -78,9 +77,9 @@ export default function FloatingNav() {
                 <div className="flex items-center justify-between px-6 md:px-12 py-5">
                     <Link to="/" className="flex items-center gap-3">
                         <img
-                            src="https://media.base44.com/images/public/69f75336e96bd4099e5fc9aa/f249384d3_LOGOREDVANDET.png"
+                            src="rv-logo.png"
                             alt="Red Vandet"
-                            className="h-10 w-auto"
+                            className="h-15 w-auto"
                         />
                     </Link>
                     <div className="flex items-center gap-6">
@@ -133,9 +132,9 @@ export default function FloatingNav() {
                                 onClick={() => setMenuOpen(false)}
                             >
                                 <img
-                                    src="https://media.base44.com/images/public/69f75336e96bd4099e5fc9aa/f249384d3_LOGOREDVANDET.png"
+                                    src="rv-logo.png"
                                     alt="Red Vandet"
-                                    className="h-10 w-auto"
+                                    className="h-15 w-auto"
                                 />
                             </Link>
                             <button
