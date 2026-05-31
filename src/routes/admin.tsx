@@ -1,7 +1,7 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { prisma } from '#/db'
 import { auth } from '#/lib/auth'
 import { authClient } from '#/lib/auth-client'
@@ -69,12 +69,6 @@ function formatDateTime(iso: string) {
 	const h = String(d.getHours()).padStart(2, '0')
 	const m = String(d.getMinutes()).padStart(2, '0')
 	return `${day}. ${month} ${year}, ${h}:${m}`
-}
-
-function ClientDate({ iso }: { iso: string }) {
-	const [label, setLabel] = useState('')
-	useEffect(() => { setLabel(formatDateTime(iso)) }, [iso])
-	return <p className="text-xs text-muted-foreground">{label}</p>
 }
 
 function AdminPage() {
@@ -223,7 +217,9 @@ function AdminPage() {
 													</div>
 												</div>
 												<div className="flex items-center gap-3 shrink-0">
-													<ClientDate iso={msg.createdAt} />
+													<p suppressHydrationWarning className="text-xs text-muted-foreground">
+														{formatDateTime(msg.createdAt)}
+													</p>
 													<button
 														type="button"
 														onClick={(e) => handleDelete(e, msg.id)}
