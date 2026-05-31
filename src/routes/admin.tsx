@@ -2,9 +2,9 @@ import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { useState } from 'react'
+import { prisma } from '#/db'
 import { auth } from '#/lib/auth'
 import { authClient } from '#/lib/auth-client'
-import { prisma } from '#/db'
 
 const getSession = createServerFn().handler(async () => {
 	const request = getRequest()
@@ -16,8 +16,10 @@ const getMessages = createServerFn().handler(async () => {
 	const request = getRequest()
 	const session = await auth.api.getSession({ headers: request.headers })
 	if (!session) throw new Error('Unauthorized')
-	const msgs = await prisma.contactMessage.findMany({ orderBy: { createdAt: 'desc' } })
-	return msgs.map(m => ({ ...m, createdAt: m.createdAt.toISOString() }))
+	const msgs = await prisma.contactMessage.findMany({
+		orderBy: { createdAt: 'desc' },
+	})
+	return msgs.map((m) => ({ ...m, createdAt: m.createdAt.toISOString() }))
 })
 
 const markMessageRead = createServerFn({ method: 'POST' })
@@ -26,7 +28,10 @@ const markMessageRead = createServerFn({ method: 'POST' })
 		const request = getRequest()
 		const session = await auth.api.getSession({ headers: request.headers })
 		if (!session) throw new Error('Unauthorized')
-		await prisma.contactMessage.update({ where: { id }, data: { read: true } })
+		await prisma.contactMessage.update({
+			where: { id },
+			data: { read: true },
+		})
 	})
 
 export const Route = createFileRoute('/admin')({
@@ -65,12 +70,14 @@ function AdminPage() {
 		}
 		setExpandedId(id)
 		if (!alreadyRead && !localReadIds.has(id)) {
-			setLocalReadIds(prev => new Set(prev).add(id))
+			setLocalReadIds((prev) => new Set(prev).add(id))
 			await markMessageRead({ data: id })
 		}
 	}
 
-	const unreadCount = messages.filter(m => !m.read && !localReadIds.has(m.id)).length
+	const unreadCount = messages.filter(
+		(m) => !m.read && !localReadIds.has(m.id),
+	).length
 
 	return (
 		<main className="mx-auto max-w-3xl px-6 py-32 md:px-12">
@@ -79,7 +86,9 @@ function AdminPage() {
 					<p className="mb-1 font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">
 						Administration
 					</p>
-					<h1 className="text-4xl font-bold text-[var(--sea-ink)]">Dashboard</h1>
+					<h1 className="text-4xl font-bold text-[var(--sea-ink)]">
+						Dashboard
+					</h1>
 				</div>
 				<button
 					type="button"
@@ -91,10 +100,16 @@ function AdminPage() {
 			</div>
 
 			<div className="mb-8 flex gap-1 border-b border-border">
-				<TabButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')}>
+				<TabButton
+					active={tab === 'dashboard'}
+					onClick={() => setTab('dashboard')}
+				>
 					Dashboard
 				</TabButton>
-				<TabButton active={tab === 'messages'} onClick={() => setTab('messages')}>
+				<TabButton
+					active={tab === 'messages'}
+					onClick={() => setTab('messages')}
+				>
 					<span>Beskeder</span>
 					{unreadCount > 0 && (
 						<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
@@ -109,39 +124,66 @@ function AdminPage() {
 					<p className="mb-1 text-xs font-mono text-[var(--sea-ink-soft)] uppercase tracking-widest">
 						Logget ind som
 					</p>
-					<p className="text-lg font-semibold text-[var(--sea-ink)]">{session.user.name}</p>
-					<p className="text-sm text-muted-foreground">{session.user.email}</p>
+					<p className="text-lg font-semibold text-[var(--sea-ink)]">
+						{session.user.name}
+					</p>
+					<p className="text-sm text-muted-foreground">
+						{session.user.email}
+					</p>
 				</div>
 			)}
 
 			{tab === 'messages' && (
 				<div className="rounded-xl border border-border overflow-hidden">
 					{messages.length === 0 ? (
-						<p className="py-12 text-center text-sm text-muted-foreground">Ingen beskeder endnu.</p>
+						<p className="py-12 text-center text-sm text-muted-foreground">
+							Ingen beskeder endnu.
+						</p>
 					) : (
 						<ul className="flex flex-col divide-y divide-border/40">
 							{messages.map((msg) => {
-								const isRead = msg.read || localReadIds.has(msg.id)
+								const isRead =
+									msg.read || localReadIds.has(msg.id)
 								const isExpanded = expandedId === msg.id
 								return (
 									<li key={msg.id}>
 										<button
 											type="button"
-											onClick={() => handleToggleMessage(msg.id, msg.read)}
+											onClick={() =>
+												handleToggleMessage(
+													msg.id,
+													msg.read,
+												)
+											}
 											className="w-full px-5 py-4 text-left hover:bg-secondary/30 transition-colors"
 										>
 											<div className="flex items-start justify-between gap-4">
 												<div className="flex items-center gap-3 min-w-0">
-													<span className={`h-2 w-2 shrink-0 rounded-full mt-1 ${!isRead ? 'bg-primary' : 'bg-transparent'}`} />
+													<span
+														className={`h-2 w-2 shrink-0 rounded-full mt-1 ${!isRead ? 'bg-primary' : 'bg-transparent'}`}
+													/>
 													<div className="min-w-0">
-														<p className={`text-sm font-semibold truncate ${!isRead ? 'text-[var(--sea-ink)]' : 'text-muted-foreground'}`}>
+														<p
+															className={`text-sm font-semibold truncate ${!isRead ? 'text-[var(--sea-ink)]' : 'text-muted-foreground'}`}
+														>
 															{msg.name}
 														</p>
-														<p className="text-xs text-muted-foreground truncate">{msg.email}</p>
+														<p className="text-xs text-muted-foreground truncate">
+															{msg.email}
+														</p>
 													</div>
 												</div>
 												<p className="shrink-0 text-xs text-muted-foreground">
-													{new Date(msg.createdAt).toLocaleDateString('da-DK', { day: 'numeric', month: 'short', year: 'numeric' })}
+													{new Date(
+														msg.createdAt,
+													).toLocaleDateString(
+														'da-DK',
+														{
+															day: 'numeric',
+															month: 'short',
+															year: 'numeric',
+														},
+													)}
 												</p>
 											</div>
 											{!isExpanded && (
@@ -168,16 +210,23 @@ function AdminPage() {
 	)
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabButton({
+	active,
+	onClick,
+	children,
+}: {
+	active: boolean
+	onClick: () => void
+	children: React.ReactNode
+}) {
 	return (
 		<button
 			type="button"
 			onClick={onClick}
-			className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-				active
+			className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${active
 					? 'border-primary text-[var(--sea-ink)]'
 					: 'border-transparent text-muted-foreground hover:text-[var(--sea-ink)]'
-			}`}
+				}`}
 		>
 			{children}
 		</button>
