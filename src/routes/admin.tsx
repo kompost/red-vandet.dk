@@ -1,7 +1,7 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { prisma } from '#/db'
 import { auth } from '#/lib/auth'
 import { authClient } from '#/lib/auth-client'
@@ -59,14 +59,22 @@ export const Route = createFileRoute('/admin')({
 
 type Tab = 'dashboard' | 'messages'
 
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+
 function formatDateTime(iso: string) {
-	return new Date(iso).toLocaleString('da-DK', {
-		day: 'numeric',
-		month: 'short',
-		year: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit',
-	})
+	const d = new Date(iso)
+	const day = d.getDate()
+	const month = MONTHS[d.getMonth()]
+	const year = d.getFullYear()
+	const h = String(d.getHours()).padStart(2, '0')
+	const m = String(d.getMinutes()).padStart(2, '0')
+	return `${day}. ${month} ${year}, ${h}:${m}`
+}
+
+function ClientDate({ iso }: { iso: string }) {
+	const [label, setLabel] = useState('')
+	useEffect(() => { setLabel(formatDateTime(iso)) }, [iso])
+	return <p className="text-xs text-muted-foreground">{label}</p>
 }
 
 function AdminPage() {
@@ -215,9 +223,7 @@ function AdminPage() {
 													</div>
 												</div>
 												<div className="flex items-center gap-3 shrink-0">
-													<p className="text-xs text-muted-foreground">
-														{formatDateTime(msg.createdAt)}
-													</p>
+													<ClientDate iso={msg.createdAt} />
 													<button
 														type="button"
 														onClick={(e) => handleDelete(e, msg.id)}
