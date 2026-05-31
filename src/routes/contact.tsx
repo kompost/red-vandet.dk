@@ -3,6 +3,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
 import { prisma } from '#/db'
 
+
 const submitContactMessage = createServerFn({ method: 'POST' })
 	.inputValidator((data: { name: string; email: string; message: string }) => data)
 	.handler(async ({ data }) => {
@@ -12,17 +13,18 @@ const submitContactMessage = createServerFn({ method: 'POST' })
 export const Route = createFileRoute('/contact')({ component: Contact })
 
 function Contact() {
-	const [name, setName] = useState('')
-	const [email, setEmail] = useState('')
-	const [message, setMessage] = useState('')
 	const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
-	const handleSubmit = async (e: React.FormEvent) => {
+	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
-		if (!name.trim() || !email.trim() || !message.trim()) return
+		const fd = new FormData(e.currentTarget)
+		const name = (fd.get('name') as string).trim()
+		const email = (fd.get('email') as string).trim()
+		const message = (fd.get('message') as string).trim()
+		if (!name || !email || !message) return
 		setStatus('loading')
 		try {
-			await submitContactMessage({ data: { name: name.trim(), email: email.trim(), message: message.trim() } })
+			await submitContactMessage({ data: { name, email, message } })
 			setStatus('success')
 		} catch {
 			setStatus('error')
@@ -45,10 +47,9 @@ function Contact() {
 						<label className="text-sm font-medium text-[var(--sea-ink)]" htmlFor="name">Navn</label>
 						<input
 							id="name"
+							name="name"
 							type="text"
 							placeholder="Dit navn"
-							value={name}
-							onChange={e => setName(e.target.value)}
 							required
 							className="rounded-xl border border-border/50 bg-secondary/30 px-4 py-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:bg-secondary/60"
 						/>
@@ -57,10 +58,9 @@ function Contact() {
 						<label className="text-sm font-medium text-[var(--sea-ink)]" htmlFor="email">E-mail</label>
 						<input
 							id="email"
+							name="email"
 							type="email"
 							placeholder="din@email.dk"
-							value={email}
-							onChange={e => setEmail(e.target.value)}
 							required
 							className="rounded-xl border border-border/50 bg-secondary/30 px-4 py-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:bg-secondary/60"
 						/>
@@ -69,10 +69,9 @@ function Contact() {
 						<label className="text-sm font-medium text-[var(--sea-ink)]" htmlFor="message">Besked</label>
 						<textarea
 							id="message"
+							name="message"
 							rows={6}
 							placeholder="Skriv din besked her..."
-							value={message}
-							onChange={e => setMessage(e.target.value)}
 							required
 							className="rounded-xl border border-border/50 bg-secondary/30 px-4 py-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:bg-secondary/60 resize-none"
 						/>
