@@ -1,9 +1,6 @@
 import { PrismaClient } from '../src/generated/prisma/client.js'
 import { PrismaPg } from '@prisma/adapter-pg'
-import { scrypt, randomBytes } from 'node:crypto'
-import { promisify } from 'node:util'
-
-const scryptAsync = promisify(scrypt)
+import { scryptSync, randomBytes } from 'node:crypto'
 
 const adapter = new PrismaPg({
 	connectionString: process.env.DATABASE_URL!,
@@ -11,13 +8,9 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter })
 
-async function hashPassword(password: string) {
+function hashPassword(password: string) {
 	const salt = randomBytes(16).toString('hex')
-	const key = await scryptAsync(password.normalize('NFKC'), salt, 64, {
-		N: 16384,
-		r: 16,
-		p: 1,
-	}) as Buffer
+	const key = scryptSync(password.normalize('NFKC'), salt, 64, { N: 16384, r: 16, p: 1 })
 	return `${salt}:${key.toString('hex')}`
 }
 
@@ -49,7 +42,7 @@ async function main() {
 					id: crypto.randomUUID(),
 					accountId: email,
 					providerId: 'credential',
-					password: await hashPassword(password),
+					password: hashPassword(password),
 					createdAt: now,
 					updatedAt: now,
 				},
