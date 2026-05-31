@@ -1,6 +1,7 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
+import { randomBytes, scryptSync } from 'node:crypto'
 import { useState } from 'react'
 import { prisma } from '#/db'
 import { auth } from '#/lib/auth'
@@ -31,6 +32,34 @@ const markMessageRead = createServerFn({ method: 'POST' })
 		await prisma.contactMessage.update({
 			where: { id },
 			data: { read: true },
+		})
+	})
+
+const changePassword = createServerFn({ method: 'POST' })
+	.inputValidator((data: { currentPassword: string; newPassword: string }) => data)
+	.handler(async ({ data }) => {
+		const request = getRequest()
+		const session = await auth.api.getSession({ headers: request.headers })
+		if (!session) throw new Error('Unauthorized')
+
+		const account = await prisma.account.findFirst({
+			where: { userId: session.user.id, providerId: 'credential' },
+		})
+		if (!account?.password) throw new Error('No password account found')
+
+		const [salt, storedKey] = account.password.split(':')
+		const attempt = scryptSync(data.currentPassword.normalize('NFKC'), salt, 64, {
+			N: 16384, r: 16, p: 1, maxmem: 128 * 16384 * 16 * 2,
+		})
+		if (attempt.toString('hex') !== storedKey) throw new Error('Forkert adgangskode')
+
+		const newSalt = randomBytes(16).toString('hex')
+		const newKey = scryptSync(data.newPassword.normalize('NFKC'), newSalt, 64, {
+			N: 16384, r: 16, p: 1, maxmem: 128 * 16384 * 16 * 2,
+		})
+		await prisma.account.update({
+			where: { id: account.id },
+			data: { password: `${newSalt}:${newKey.toString('hex')}`, updatedAt: new Date() },
 		})
 	})
 
@@ -158,16 +187,19 @@ function AdminPage() {
 			</div>
 
 			{tab === 'dashboard' && (
-				<div className="rounded-xl border border-border bg-secondary/20 p-6">
-					<p className="mb-1 text-xs font-mono text-[var(--sea-ink-soft)] uppercase tracking-widest">
-						Logget ind som
-					</p>
-					<p className="text-lg font-semibold text-[var(--sea-ink)]">
-						{session.user.name}
-					</p>
-					<p className="text-sm text-muted-foreground">
-						{session.user.email}
-					</p>
+				<div className="flex flex-col gap-6">
+					<div className="rounded-xl border border-border bg-secondary/20 p-6">
+						<p className="mb-1 text-xs font-mono text-[var(--sea-ink-soft)] uppercase tracking-widest">
+							Logget ind som
+						</p>
+						<p className="text-lg font-semibold text-[var(--sea-ink)]">
+							{session.user.name}
+						</p>
+						<p className="text-sm text-muted-foreground">
+							{session.user.email}
+						</p>
+					</div>
+					<ChangePasswordForm />
 				</div>
 			)}
 
@@ -250,6 +282,95 @@ function AdminPage() {
 				</div>
 			)}
 		</main>
+	)
+}
+
+function ChangePasswordForm() {
+	const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+	const [errorMsg, setErrorMsg] = useState('')
+
+	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault()
+		const fd = new FormData(e.currentTarget)
+		const currentPassword = fd.get('currentPassword') as string
+		const newPassword = fd.get('newPassword') as string
+		const confirmPassword = fd.get('confirmPassword') as string
+		if (newPassword !== confirmPassword) {
+			setErrorMsg('Adgangskoderne stemmer ikke overens')
+			setStatus('error')
+			return
+		}
+		setStatus('loading')
+		setErrorMsg('')
+		try {
+			await changePassword({ data: { currentPassword, newPassword } })
+			setStatus('success')
+			e.currentTarget.reset()
+		} catch (err) {
+			setErrorMsg(err instanceof Error ? err.message : 'Noget gik galt')
+			setStatus('error')
+		}
+	}
+
+	return (
+		<div className="rounded-xl border border-border p-6">
+			<p className="mb-4 text-xs font-mono text-[var(--sea-ink-soft)] uppercase tracking-widest">
+				Skift adgangskode
+			</p>
+			<form onSubmit={handleSubmit} className="flex flex-col gap-4">
+				<div className="flex flex-col gap-1.5">
+					<label className="text-sm font-medium text-[var(--sea-ink)]" htmlFor="currentPassword">
+						Nuværende adgangskode
+					</label>
+					<input
+						id="currentPassword"
+						name="currentPassword"
+						type="password"
+						required
+						className="rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 text-sm outline-none transition-colors focus:border-primary focus:bg-secondary/60"
+					/>
+				</div>
+				<div className="flex flex-col gap-1.5">
+					<label className="text-sm font-medium text-[var(--sea-ink)]" htmlFor="newPassword">
+						Ny adgangskode
+					</label>
+					<input
+						id="newPassword"
+						name="newPassword"
+						type="password"
+						required
+						minLength={8}
+						className="rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 text-sm outline-none transition-colors focus:border-primary focus:bg-secondary/60"
+					/>
+				</div>
+				<div className="flex flex-col gap-1.5">
+					<label className="text-sm font-medium text-[var(--sea-ink)]" htmlFor="confirmPassword">
+						Bekræft ny adgangskode
+					</label>
+					<input
+						id="confirmPassword"
+						name="confirmPassword"
+						type="password"
+						required
+						minLength={8}
+						className="rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 text-sm outline-none transition-colors focus:border-primary focus:bg-secondary/60"
+					/>
+				</div>
+				{status === 'error' && (
+					<p className="text-sm text-destructive">{errorMsg || 'Noget gik galt'}</p>
+				)}
+				{status === 'success' && (
+					<p className="text-sm text-green-600 dark:text-green-400">Adgangskode opdateret.</p>
+				)}
+				<button
+					type="submit"
+					disabled={status === 'loading'}
+					className="self-start rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+				>
+					{status === 'loading' ? 'Gemmer...' : 'Gem adgangskode'}
+				</button>
+			</form>
+		</div>
 	)
 }
 
