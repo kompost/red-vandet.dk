@@ -2,6 +2,9 @@ import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { randomBytes, scryptSync } from 'node:crypto'
+import { unlink } from 'node:fs/promises'
+import { join } from 'node:path'
+import { readdir } from 'node:fs/promises'
 import { useState } from 'react'
 import { prisma } from '#/db'
 import { auth } from '#/lib/auth'
@@ -63,6 +66,30 @@ const changePassword = createServerFn({ method: 'POST' })
 		})
 	})
 
+const docsPath = () => process.env.DOCUMENTS_PATH || '/documents'
+
+const getDocuments = createServerFn().handler(async () => {
+	const request = getRequest()
+	const session = await auth.api.getSession({ headers: request.headers })
+	if (!session) throw new Error('Unauthorized')
+	try {
+		const files = await readdir(docsPath())
+		return files.filter((f) => f.endsWith('.pdf')).sort()
+	} catch {
+		return []
+	}
+})
+
+const deleteDocument = createServerFn({ method: 'POST' })
+	.inputValidator((filename: string) => filename)
+	.handler(async ({ data: filename }) => {
+		const request = getRequest()
+		const session = await auth.api.getSession({ headers: request.headers })
+		if (!session) throw new Error('Unauthorized')
+		if (filename.includes('/') || filename.includes('..')) throw new Error('Invalid filename')
+		await unlink(join(docsPath(), filename))
+	})
+
 const deleteMessage = createServerFn({ method: 'POST' })
 	.inputValidator((id: string) => id)
 	.handler(async ({ data: id }) => {
@@ -81,12 +108,12 @@ export const Route = createFileRoute('/admin')({
 		return { session }
 	},
 	loader: async () => {
-		return { messages: await getMessages() }
+		return { messages: await getMessages(), documents: await getDocuments() }
 	},
 	component: AdminPage,
 })
 
-type Tab = 'dashboard' | 'messages'
+type Tab = 'dashboard' | 'messages' | 'documents'
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
 
@@ -102,12 +129,13 @@ function formatDateTime(iso: string) {
 
 function AdminPage() {
 	const { session } = Route.useRouteContext()
-	const { messages: initialMessages } = Route.useLoaderData()
+	const { messages: initialMessages, documents: initialDocuments } = Route.useLoaderData()
 	const router = useRouter()
 	const [tab, setTab] = useState<Tab>('dashboard')
 	const [expandedId, setExpandedId] = useState<string | null>(null)
 	const [localReadIds, setLocalReadIds] = useState<Set<string>>(new Set())
 	const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
+	const [deletedDocs, setDeletedDocs] = useState<Set<string>>(new Set())
 	const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
 
 	const handleSignOut = async () => {
@@ -183,6 +211,12 @@ function AdminPage() {
 							{unreadCount}
 						</span>
 					)}
+				</TabButton>
+				<TabButton
+					active={tab === 'documents'}
+					onClick={() => setTab('documents')}
+				>
+					Dokumenter
 				</TabButton>
 			</div>
 
@@ -281,7 +315,124 @@ function AdminPage() {
 					)}
 				</div>
 			)}
+
+			{tab === 'documents' && (
+				<DocumentsTab
+					initialDocuments={initialDocuments}
+					deletedDocs={deletedDocs}
+					onDelete={async (filename) => {
+						setDeletedDocs((prev) => new Set(prev).add(filename))
+						await deleteDocument({ data: filename })
+					}}
+					onUploaded={() => router.invalidate()}
+				/>
+			)}
 		</main>
+	)
+}
+
+function DocumentsTab({
+	initialDocuments,
+	deletedDocs,
+	onDelete,
+	onUploaded,
+}: {
+	initialDocuments: string[]
+	deletedDocs: Set<string>
+	onDelete: (filename: string) => void
+	onUploaded: () => void
+}) {
+	const [uploadStatus, setUploadStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+
+	const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault()
+		const form = e.currentTarget
+		const fd = new FormData(form)
+		const file = fd.get('file') as File | null
+		if (!file || file.size === 0) return
+		setUploadStatus('loading')
+		try {
+			const res = await fetch('/api/upload', { method: 'POST', body: fd })
+			if (!res.ok) throw new Error()
+			setUploadStatus('success')
+			form.reset()
+			onUploaded()
+		} catch {
+			setUploadStatus('error')
+		}
+	}
+
+	const documents = initialDocuments.filter((f) => !deletedDocs.has(f))
+
+	return (
+		<div className="flex flex-col gap-6">
+			<div className="rounded-xl border border-border p-6">
+				<p className="mb-4 text-xs font-mono text-[var(--sea-ink-soft)] uppercase tracking-widest">
+					Upload PDF
+				</p>
+				<form onSubmit={handleUpload} className="flex flex-col gap-4">
+					<input
+						name="file"
+						type="file"
+						accept=".pdf"
+						required
+						className="text-sm text-[var(--sea-ink)] file:mr-4 file:rounded-lg file:border-0 file:bg-secondary file:px-4 file:py-2 file:text-sm file:font-medium file:text-[var(--sea-ink)] hover:file:bg-secondary/80"
+					/>
+					{uploadStatus === 'error' && (
+						<p className="text-sm text-destructive">Upload fejlede. Prøv igen.</p>
+					)}
+					{uploadStatus === 'success' && (
+						<p className="text-sm text-green-600 dark:text-green-400">Fil uploadet.</p>
+					)}
+					<button
+						type="submit"
+						disabled={uploadStatus === 'loading'}
+						className="self-start rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+					>
+						{uploadStatus === 'loading' ? 'Uploader...' : 'Upload'}
+					</button>
+				</form>
+			</div>
+
+			<div className="rounded-xl border border-border overflow-hidden">
+				{documents.length === 0 ? (
+					<p className="py-12 text-center text-sm text-muted-foreground">
+						Ingen dokumenter endnu.
+					</p>
+				) : (
+					<ul className="flex flex-col divide-y divide-border/40">
+						{documents.map((file, i) => (
+							<li key={file} className="flex items-center gap-4 px-5 py-4">
+								<span className="font-mono text-xs text-muted-foreground w-5 shrink-0">
+									{String(i + 1).padStart(2, '0')}
+								</span>
+								<span className="flex-1 text-sm text-[var(--sea-ink)] truncate">
+									{file.replace(/_/g, ' ').replace(/\.pdf$/i, '')}
+								</span>
+								<a
+									href={`/documents/${file}`}
+									target="_blank"
+									rel="noreferrer"
+									className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors"
+								>
+									PDF
+								</a>
+								<button
+									type="button"
+									onClick={() => onDelete(file)}
+									className="text-muted-foreground/50 hover:text-destructive transition-colors"
+									title="Slet dokument"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+										<path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2" />
+									</svg>
+								</button>
+							</li>
+						))}
+					</ul>
+				)}
+			</div>
+		</div>
 	)
 }
 

@@ -2,9 +2,11 @@ import { createServerFn } from '@tanstack/react-start'
 import { createFileRoute } from '@tanstack/react-router'
 import { readdir } from 'node:fs/promises'
 
+const docsPath = () => process.env.DOCUMENTS_PATH || '/documents'
+
 const getDocuments = createServerFn().handler(async () => {
     try {
-        const files = await readdir('/documents')
+        const files = await readdir(docsPath())
         return files.filter((f) => f.endsWith('.pdf')).sort()
     } catch {
         return []
