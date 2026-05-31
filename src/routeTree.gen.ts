@@ -9,7 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as RedVandetRouteImport } from './routes/red-vandet'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as KnowledgeRouteImport } from './routes/knowledge'
 import { Route as ContactRouteImport } from './routes/contact'
@@ -17,11 +16,6 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
-const RedVandetRoute = RedVandetRouteImport.update({
-  id: '/red-vandet',
-  path: '/red-vandet',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -59,7 +53,6 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/knowledge': typeof KnowledgeRoute
   '/login': typeof LoginRoute
-  '/red-vandet': typeof RedVandetRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
@@ -68,7 +61,6 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/knowledge': typeof KnowledgeRoute
   '/login': typeof LoginRoute
-  '/red-vandet': typeof RedVandetRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
@@ -78,7 +70,6 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/knowledge': typeof KnowledgeRoute
   '/login': typeof LoginRoute
-  '/red-vandet': typeof RedVandetRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
@@ -89,17 +80,9 @@ export interface FileRouteTypes {
     | '/contact'
     | '/knowledge'
     | '/login'
-    | '/red-vandet'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/admin'
-    | '/contact'
-    | '/knowledge'
-    | '/login'
-    | '/red-vandet'
-    | '/api/auth/$'
+  to: '/' | '/admin' | '/contact' | '/knowledge' | '/login' | '/api/auth/$'
   id:
     | '__root__'
     | '/'
@@ -107,7 +90,6 @@ export interface FileRouteTypes {
     | '/contact'
     | '/knowledge'
     | '/login'
-    | '/red-vandet'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
@@ -117,19 +99,11 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   KnowledgeRoute: typeof KnowledgeRoute
   LoginRoute: typeof LoginRoute
-  RedVandetRoute: typeof RedVandetRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/red-vandet': {
-      id: '/red-vandet'
-      path: '/red-vandet'
-      fullPath: '/red-vandet'
-      preLoaderRoute: typeof RedVandetRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -181,7 +155,6 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   KnowledgeRoute: KnowledgeRoute,
   LoginRoute: LoginRoute,
-  RedVandetRoute: RedVandetRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

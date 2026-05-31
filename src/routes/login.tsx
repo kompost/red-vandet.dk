@@ -2,8 +2,8 @@ import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { useState } from 'react'
-import { authClient } from '#/lib/auth-client'
 import { auth } from '#/lib/auth'
+import { authClient } from '#/lib/auth-client'
 
 const getSession = createServerFn().handler(async () => {
     const request = getRequest()
@@ -50,11 +50,16 @@ function LoginPage() {
     return (
         <main className="flex min-h-screen items-center justify-center px-4">
             <div className="w-full max-w-sm">
-                <h1 className="mb-8 text-2xl font-bold text-[var(--sea-ink)]">Log ind</h1>
+                <h1 className="mb-8 text-2xl font-bold text-[var(--sea-ink)]">
+                    Log ind
+                </h1>
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1.5">
-                        <label htmlFor="email" className="text-sm font-medium text-[var(--sea-ink)]">
+                        <label
+                            htmlFor="email"
+                            className="text-sm font-medium text-[var(--sea-ink)]"
+                        >
                             E-mail
                         </label>
                         <input
@@ -69,7 +74,10 @@ function LoginPage() {
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                        <label htmlFor="password" className="text-sm font-medium text-[var(--sea-ink)]">
+                        <label
+                            htmlFor="password"
+                            className="text-sm font-medium text-[var(--sea-ink)]"
+                        >
                             Adgangskode
                         </label>
                         <input
