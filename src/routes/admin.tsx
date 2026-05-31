@@ -34,6 +34,15 @@ const markMessageRead = createServerFn({ method: 'POST' })
 		})
 	})
 
+const deleteMessage = createServerFn({ method: 'POST' })
+	.inputValidator((id: string) => id)
+	.handler(async ({ data: id }) => {
+		const request = getRequest()
+		const session = await auth.api.getSession({ headers: request.headers })
+		if (!session) throw new Error('Unauthorized')
+		await prisma.contactMessage.delete({ where: { id } })
+	})
+
 export const Route = createFileRoute('/admin')({
 	beforeLoad: async () => {
 		const session = await getSession()
@@ -50,13 +59,25 @@ export const Route = createFileRoute('/admin')({
 
 type Tab = 'dashboard' | 'messages'
 
+function formatDateTime(iso: string) {
+	return new Date(iso).toLocaleString('da-DK', {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+	})
+}
+
 function AdminPage() {
 	const { session } = Route.useRouteContext()
-	const { messages } = Route.useLoaderData()
+	const { messages: initialMessages } = Route.useLoaderData()
 	const router = useRouter()
 	const [tab, setTab] = useState<Tab>('dashboard')
 	const [expandedId, setExpandedId] = useState<string | null>(null)
 	const [localReadIds, setLocalReadIds] = useState<Set<string>>(new Set())
+	const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
+	const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
 
 	const handleSignOut = async () => {
 		await authClient.signOut()
@@ -75,6 +96,21 @@ function AdminPage() {
 		}
 	}
 
+	const handleDelete = async (e: React.MouseEvent, id: string) => {
+		e.stopPropagation()
+		setDeletedIds((prev) => new Set(prev).add(id))
+		if (expandedId === id) setExpandedId(null)
+		await deleteMessage({ data: id })
+	}
+
+	const handleCopyEmail = (e: React.MouseEvent, email: string) => {
+		e.stopPropagation()
+		navigator.clipboard.writeText(email)
+		setCopiedEmail(email)
+		setTimeout(() => setCopiedEmail(null), 2000)
+	}
+
+	const messages = initialMessages.filter((m) => !deletedIds.has(m.id))
 	const unreadCount = messages.filter(
 		(m) => !m.read && !localReadIds.has(m.id),
 	).length
@@ -168,23 +204,31 @@ function AdminPage() {
 														>
 															{msg.name}
 														</p>
-														<p className="text-xs text-muted-foreground truncate">
-															{msg.email}
-														</p>
+														<button
+															type="button"
+															onClick={(e) => handleCopyEmail(e, msg.email)}
+															className="text-xs text-muted-foreground hover:text-primary transition-colors"
+															title="Kopiér e-mail"
+														>
+															{copiedEmail === msg.email ? 'Kopieret!' : msg.email}
+														</button>
 													</div>
 												</div>
-												<p className="shrink-0 text-xs text-muted-foreground">
-													{new Date(
-														msg.createdAt,
-													).toLocaleDateString(
-														'da-DK',
-														{
-															day: 'numeric',
-															month: 'short',
-															year: 'numeric',
-														},
-													)}
-												</p>
+												<div className="flex items-center gap-3 shrink-0">
+													<p className="text-xs text-muted-foreground">
+														{formatDateTime(msg.createdAt)}
+													</p>
+													<button
+														type="button"
+														onClick={(e) => handleDelete(e, msg.id)}
+														className="text-muted-foreground/50 hover:text-destructive transition-colors"
+														title="Slet besked"
+													>
+														<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+															<path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2" />
+														</svg>
+													</button>
+												</div>
 											</div>
 											{!isExpanded && (
 												<p className="mt-2 ml-5 text-xs text-muted-foreground line-clamp-1 pl-2">
