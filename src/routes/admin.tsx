@@ -291,7 +291,8 @@ function ChangePasswordForm() {
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
-		const fd = new FormData(e.currentTarget)
+		const form = e.currentTarget
+		const fd = new FormData(form)
 		const currentPassword = fd.get('currentPassword') as string
 		const newPassword = fd.get('newPassword') as string
 		const confirmPassword = fd.get('confirmPassword') as string
@@ -305,7 +306,7 @@ function ChangePasswordForm() {
 		try {
 			await changePassword({ data: { currentPassword, newPassword } })
 			setStatus('success')
-			e.currentTarget.reset()
+			form.reset()
 		} catch (err) {
 			setErrorMsg(err instanceof Error ? err.message : 'Noget gik galt')
 			setStatus('error')
