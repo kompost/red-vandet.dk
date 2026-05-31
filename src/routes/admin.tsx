@@ -90,6 +90,31 @@ const deleteDocument = createServerFn({ method: 'POST' })
 		await unlink(join(docsPath(), filename))
 	})
 
+const getExternalLinks = createServerFn().handler(async () => {
+	const request = getRequest()
+	const session = await auth.api.getSession({ headers: request.headers })
+	if (!session) throw new Error('Unauthorized')
+	return prisma.externalLink.findMany({ orderBy: { createdAt: 'desc' } })
+})
+
+const addExternalLink = createServerFn({ method: 'POST' })
+	.inputValidator((data: { title: string; url: string }) => data)
+	.handler(async ({ data }) => {
+		const request = getRequest()
+		const session = await auth.api.getSession({ headers: request.headers })
+		if (!session) throw new Error('Unauthorized')
+		await prisma.externalLink.create({ data })
+	})
+
+const deleteExternalLink = createServerFn({ method: 'POST' })
+	.inputValidator((id: string) => id)
+	.handler(async ({ data: id }) => {
+		const request = getRequest()
+		const session = await auth.api.getSession({ headers: request.headers })
+		if (!session) throw new Error('Unauthorized')
+		await prisma.externalLink.delete({ where: { id } })
+	})
+
 const deleteMessage = createServerFn({ method: 'POST' })
 	.inputValidator((id: string) => id)
 	.handler(async ({ data: id }) => {
@@ -108,7 +133,12 @@ export const Route = createFileRoute('/admin')({
 		return { session }
 	},
 	loader: async () => {
-		return { messages: await getMessages(), documents: await getDocuments() }
+		const [messages, documents, externalLinks] = await Promise.all([
+			getMessages(),
+			getDocuments(),
+			getExternalLinks(),
+		])
+		return { messages, documents, externalLinks }
 	},
 	component: AdminPage,
 })
@@ -129,7 +159,7 @@ function formatDateTime(iso: string) {
 
 function AdminPage() {
 	const { session } = Route.useRouteContext()
-	const { messages: initialMessages, documents: initialDocuments } = Route.useLoaderData()
+	const { messages: initialMessages, documents: initialDocuments, externalLinks: initialLinks } = Route.useLoaderData()
 	const router = useRouter()
 	const [tab, setTab] = useState<Tab>('dashboard')
 	const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -325,24 +355,37 @@ function AdminPage() {
 						await deleteDocument({ data: filename })
 					}}
 					onUploaded={() => router.invalidate()}
+					initialLinks={initialLinks}
+					onLinkAdded={() => router.invalidate()}
+					onLinkDeleted={(id) => deleteExternalLink({ data: id })}
 				/>
 			)}
 		</main>
 	)
 }
 
+type ExternalLink = { id: string; title: string; url: string; createdAt: Date }
+
 function DocumentsTab({
 	initialDocuments,
 	deletedDocs,
 	onDelete,
 	onUploaded,
+	initialLinks,
+	onLinkAdded,
+	onLinkDeleted,
 }: {
 	initialDocuments: string[]
 	deletedDocs: Set<string>
 	onDelete: (filename: string) => void
 	onUploaded: () => void
+	initialLinks: ExternalLink[]
+	onLinkAdded: () => void
+	onLinkDeleted: (id: string) => void
 }) {
 	const [uploadStatus, setUploadStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+	const [linkStatus, setLinkStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+	const [deletedLinkIds, setDeletedLinkIds] = useState<Set<string>>(new Set())
 
 	const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
@@ -362,77 +405,147 @@ function DocumentsTab({
 		}
 	}
 
+	const handleAddLink = async (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault()
+		const form = e.currentTarget
+		const fd = new FormData(form)
+		const title = (fd.get('title') as string).trim()
+		const url = (fd.get('url') as string).trim()
+		if (!title || !url) return
+		setLinkStatus('loading')
+		try {
+			await addExternalLink({ data: { title, url } })
+			setLinkStatus('success')
+			form.reset()
+			onLinkAdded()
+		} catch {
+			setLinkStatus('error')
+		}
+	}
+
+	const handleDeleteLink = async (id: string) => {
+		setDeletedLinkIds((prev) => new Set(prev).add(id))
+		await onLinkDeleted(id)
+	}
+
 	const documents = initialDocuments.filter((f) => !deletedDocs.has(f))
+	const links = initialLinks.filter((l) => !deletedLinkIds.has(l.id))
 
 	return (
-		<div className="flex flex-col gap-6">
-			<div className="rounded-xl border border-border p-6">
-				<p className="mb-4 text-xs font-mono text-[var(--sea-ink-soft)] uppercase tracking-widest">
-					Upload PDF
-				</p>
-				<form onSubmit={handleUpload} className="flex flex-col gap-4">
-					<input
-						name="file"
-						type="file"
-						accept=".pdf"
-						required
-						className="text-sm text-[var(--sea-ink)] file:mr-4 file:rounded-lg file:border-0 file:bg-secondary file:px-4 file:py-2 file:text-sm file:font-medium file:text-[var(--sea-ink)] hover:file:bg-secondary/80"
-					/>
-					{uploadStatus === 'error' && (
-						<p className="text-sm text-destructive">Upload fejlede. Prøv igen.</p>
+		<div className="flex flex-col gap-10">
+			{/* Egne udgivelser */}
+			<div className="flex flex-col gap-4">
+				<p className="font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">Egne udgivelser</p>
+
+				<div className="rounded-xl border border-border p-6">
+					<p className="mb-4 text-xs font-medium text-[var(--sea-ink)]">Upload PDF</p>
+					<form onSubmit={handleUpload} className="flex flex-col gap-4">
+						<input
+							name="file"
+							type="file"
+							accept=".pdf"
+							required
+							className="text-sm text-[var(--sea-ink)] file:mr-4 file:rounded-lg file:border-0 file:bg-secondary file:px-4 file:py-2 file:text-sm file:font-medium file:text-[var(--sea-ink)] hover:file:bg-secondary/80"
+						/>
+						{uploadStatus === 'error' && <p className="text-sm text-destructive">Upload fejlede. Prøv igen.</p>}
+						{uploadStatus === 'success' && <p className="text-sm text-green-600 dark:text-green-400">Fil uploadet.</p>}
+						<button
+							type="submit"
+							disabled={uploadStatus === 'loading'}
+							className="self-start rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+						>
+							{uploadStatus === 'loading' ? 'Uploader...' : 'Upload'}
+						</button>
+					</form>
+				</div>
+
+				<div className="rounded-xl border border-border overflow-hidden">
+					{documents.length === 0 ? (
+						<p className="py-8 text-center text-sm text-muted-foreground">Ingen dokumenter endnu.</p>
+					) : (
+						<ul className="flex flex-col divide-y divide-border/40">
+							{documents.map((file, i) => (
+								<li key={file} className="flex items-center gap-4 px-5 py-4">
+									<span className="font-mono text-xs text-muted-foreground w-5 shrink-0">
+										{String(i + 1).padStart(2, '0')}
+									</span>
+									<span className="flex-1 text-sm text-[var(--sea-ink)] truncate">
+										{file.replace(/_/g, ' ').replace(/\.pdf$/i, '')}
+									</span>
+									<a href={`/documents/${file}`} target="_blank" rel="noreferrer" className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors">PDF</a>
+									<button type="button" onClick={() => onDelete(file)} className="text-muted-foreground/50 hover:text-destructive transition-colors" title="Slet">
+										<TrashIcon />
+									</button>
+								</li>
+							))}
+						</ul>
 					)}
-					{uploadStatus === 'success' && (
-						<p className="text-sm text-green-600 dark:text-green-400">Fil uploadet.</p>
-					)}
-					<button
-						type="submit"
-						disabled={uploadStatus === 'loading'}
-						className="self-start rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-					>
-						{uploadStatus === 'loading' ? 'Uploader...' : 'Upload'}
-					</button>
-				</form>
+				</div>
 			</div>
 
-			<div className="rounded-xl border border-border overflow-hidden">
-				{documents.length === 0 ? (
-					<p className="py-12 text-center text-sm text-muted-foreground">
-						Ingen dokumenter endnu.
-					</p>
-				) : (
-					<ul className="flex flex-col divide-y divide-border/40">
-						{documents.map((file, i) => (
-							<li key={file} className="flex items-center gap-4 px-5 py-4">
-								<span className="font-mono text-xs text-muted-foreground w-5 shrink-0">
-									{String(i + 1).padStart(2, '0')}
-								</span>
-								<span className="flex-1 text-sm text-[var(--sea-ink)] truncate">
-									{file.replace(/_/g, ' ').replace(/\.pdf$/i, '')}
-								</span>
-								<a
-									href={`/documents/${file}`}
-									target="_blank"
-									rel="noreferrer"
-									className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors"
-								>
-									PDF
-								</a>
-								<button
-									type="button"
-									onClick={() => onDelete(file)}
-									className="text-muted-foreground/50 hover:text-destructive transition-colors"
-									title="Slet dokument"
-								>
-									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-										<path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2" />
-									</svg>
-								</button>
-							</li>
-						))}
-					</ul>
-				)}
+			{/* Andre relevante udgivelser */}
+			<div className="flex flex-col gap-4">
+				<p className="font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">Andre relevante udgivelser</p>
+
+				<div className="rounded-xl border border-border p-6">
+					<p className="mb-4 text-xs font-medium text-[var(--sea-ink)]">Tilføj eksternt link</p>
+					<form onSubmit={handleAddLink} className="flex flex-col gap-3">
+						<input
+							name="title"
+							type="text"
+							placeholder="Titel"
+							required
+							className="rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:bg-secondary/60"
+						/>
+						<input
+							name="url"
+							type="url"
+							placeholder="https://..."
+							required
+							className="rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:bg-secondary/60"
+						/>
+						{linkStatus === 'error' && <p className="text-sm text-destructive">Noget gik galt. Prøv igen.</p>}
+						{linkStatus === 'success' && <p className="text-sm text-green-600 dark:text-green-400">Link tilføjet.</p>}
+						<button
+							type="submit"
+							disabled={linkStatus === 'loading'}
+							className="self-start rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+						>
+							{linkStatus === 'loading' ? 'Gemmer...' : 'Tilføj link'}
+						</button>
+					</form>
+				</div>
+
+				<div className="rounded-xl border border-border overflow-hidden">
+					{links.length === 0 ? (
+						<p className="py-8 text-center text-sm text-muted-foreground">Ingen eksterne links endnu.</p>
+					) : (
+						<ul className="flex flex-col divide-y divide-border/40">
+							{links.map((link, i) => (
+								<li key={link.id} className="flex items-center gap-4 px-5 py-4">
+									<span className="font-mono text-xs text-muted-foreground w-5 shrink-0">
+										{String(i + 1).padStart(2, '0')}
+									</span>
+									<span className="flex-1 text-sm text-[var(--sea-ink)] truncate">{link.title}</span>
+									<a href={link.url} target="_blank" rel="noreferrer" className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors truncate max-w-[160px]">{link.url}</a>
+									<button type="button" onClick={() => handleDeleteLink(link.id)} className="text-muted-foreground/50 hover:text-destructive transition-colors" title="Slet">
+										<TrashIcon />
+									</button>
+								</li>
+							))}
+						</ul>
+					)}
+				</div>
 			</div>
 		</div>
+	)
+}
+
+function TrashIcon() {
+	return (
+		<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2" />
+		</svg>
 	)
 }
 

@@ -57,6 +57,13 @@ model Verification {
   updatedAt  DateTime?
 }
 
+model ExternalLink {
+  id        String   @id @default(uuid())
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+}
+
 model ContactMessage {
   id        String   @id @default(uuid())
   name      String
