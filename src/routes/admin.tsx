@@ -185,15 +185,12 @@ function AdminPage() {
 								const isExpanded = expandedId === msg.id
 								return (
 									<li key={msg.id}>
-										<button
-											type="button"
-											onClick={() =>
-												handleToggleMessage(
-													msg.id,
-													msg.read,
-												)
-											}
-											className="w-full px-5 py-4 text-left hover:bg-secondary/30 transition-colors"
+										<div
+											role="button"
+											tabIndex={0}
+											onClick={() => handleToggleMessage(msg.id, msg.read)}
+											onKeyDown={(e) => e.key === 'Enter' && handleToggleMessage(msg.id, msg.read)}
+											className="w-full px-5 py-4 text-left hover:bg-secondary/30 transition-colors cursor-pointer"
 										>
 											<div className="flex items-start justify-between gap-4">
 												<div className="flex items-center gap-3 min-w-0">
@@ -237,7 +234,7 @@ function AdminPage() {
 													{msg.message}
 												</p>
 											)}
-										</button>
+										</div>
 										{isExpanded && (
 											<div className="px-5 pb-5 pl-[3.25rem]">
 												<p className="text-sm text-[var(--sea-ink)] whitespace-pre-wrap leading-relaxed">
