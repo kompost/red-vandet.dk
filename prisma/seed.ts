@@ -8,7 +8,20 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter })
 
-async function main() { }
+async function main() {
+	const email = process.env.ADMIN_EMAIL
+	const password = process.env.ADMIN_PASSWORD
+
+	if (!email || !password) return
+
+	const { auth } = await import('../src/lib/auth.js')
+
+	await auth.api.signUpEmail({
+		body: { email, password, name: 'Admin' },
+	})
+
+	console.log(`✅ Admin user created: ${email}`)
+}
 
 main()
   .catch((e) => {
