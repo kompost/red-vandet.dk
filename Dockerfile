@@ -27,7 +27,6 @@ COPY prisma ./prisma
 COPY prisma.config.ts ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.output ./.output
-COPY src ./src
 COPY --from=builder /app/src/generated ./src/generated
 
 COPY entrypoint.sh ./
