@@ -9,6 +9,9 @@ import { useState } from 'react'
 import { prisma } from '#/db'
 import { auth } from '#/lib/auth'
 import { authClient } from '#/lib/auth-client'
+import { PageEditor } from '#/components/PageEditor'
+import type { EditorContent } from '#/components/PageBlockRenderer'
+import type { OutputData } from '@editorjs/editorjs'
 
 const getSession = createServerFn().handler(async () => {
 	const request = getRequest()
@@ -27,7 +30,7 @@ const getMessages = createServerFn().handler(async () => {
 })
 
 const markMessageRead = createServerFn({ method: 'POST' })
-	.inputValidator((id: string) => id)
+	.validator((id: string) => id)
 	.handler(async ({ data: id }) => {
 		const request = getRequest()
 		const session = await auth.api.getSession({ headers: request.headers })
@@ -39,7 +42,7 @@ const markMessageRead = createServerFn({ method: 'POST' })
 	})
 
 const changePassword = createServerFn({ method: 'POST' })
-	.inputValidator((data: { currentPassword: string; newPassword: string }) => data)
+	.validator((data: { currentPassword: string; newPassword: string }) => data)
 	.handler(async ({ data }) => {
 		const request = getRequest()
 		const session = await auth.api.getSession({ headers: request.headers })
@@ -81,7 +84,7 @@ const getDocuments = createServerFn().handler(async () => {
 })
 
 const deleteDocument = createServerFn({ method: 'POST' })
-	.inputValidator((filename: string) => filename)
+	.validator((filename: string) => filename)
 	.handler(async ({ data: filename }) => {
 		const request = getRequest()
 		const session = await auth.api.getSession({ headers: request.headers })
@@ -98,7 +101,7 @@ const getExternalLinks = createServerFn().handler(async () => {
 })
 
 const addExternalLink = createServerFn({ method: 'POST' })
-	.inputValidator((data: { title: string; url: string }) => data)
+	.validator((data: { title: string; url: string }) => data)
 	.handler(async ({ data }) => {
 		const request = getRequest()
 		const session = await auth.api.getSession({ headers: request.headers })
@@ -107,7 +110,7 @@ const addExternalLink = createServerFn({ method: 'POST' })
 	})
 
 const deleteExternalLink = createServerFn({ method: 'POST' })
-	.inputValidator((id: string) => id)
+	.validator((id: string) => id)
 	.handler(async ({ data: id }) => {
 		const request = getRequest()
 		const session = await auth.api.getSession({ headers: request.headers })
@@ -116,12 +119,34 @@ const deleteExternalLink = createServerFn({ method: 'POST' })
 	})
 
 const deleteMessage = createServerFn({ method: 'POST' })
-	.inputValidator((id: string) => id)
+	.validator((id: string) => id)
 	.handler(async ({ data: id }) => {
 		const request = getRequest()
 		const session = await auth.api.getSession({ headers: request.headers })
 		if (!session) throw new Error('Unauthorized')
 		await prisma.contactMessage.delete({ where: { id } })
+	})
+
+const getPageContent = createServerFn().handler(async () => {
+	const request = getRequest()
+	const session = await auth.api.getSession({ headers: request.headers })
+	if (!session) throw new Error('Unauthorized')
+	const row = await prisma.pageContent.findUnique({ where: { key: 'home' } })
+	return row?.content ?? null
+})
+
+const savePageContent = createServerFn({ method: 'POST' })
+	.validator((data: string) => data)
+	.handler(async ({ data }) => {
+		const request = getRequest()
+		const session = await auth.api.getSession({ headers: request.headers })
+		if (!session) throw new Error('Unauthorized')
+		const content = JSON.parse(data)
+		await prisma.pageContent.upsert({
+			where: { key: 'home' },
+			create: { key: 'home', content },
+			update: { content },
+		})
 	})
 
 export const Route = createFileRoute('/admin')({
@@ -133,17 +158,18 @@ export const Route = createFileRoute('/admin')({
 		return { session }
 	},
 	loader: async () => {
-		const [messages, documents, externalLinks] = await Promise.all([
+		const [messages, documents, externalLinks, pageContent] = await Promise.all([
 			getMessages(),
 			getDocuments(),
 			getExternalLinks(),
+			getPageContent(),
 		])
-		return { messages, documents, externalLinks }
+		return { messages, documents, externalLinks, pageContent }
 	},
 	component: AdminPage,
 })
 
-type Tab = 'dashboard' | 'messages' | 'documents'
+type Tab = 'dashboard' | 'messages' | 'documents' | 'editor'
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
 
@@ -159,7 +185,7 @@ function formatDateTime(iso: string) {
 
 function AdminPage() {
 	const { session } = Route.useRouteContext()
-	const { messages: initialMessages, documents: initialDocuments, externalLinks: initialLinks } = Route.useLoaderData()
+	const { messages: initialMessages, documents: initialDocuments, externalLinks: initialLinks, pageContent } = Route.useLoaderData()
 	const router = useRouter()
 	const [tab, setTab] = useState<Tab>('dashboard')
 	const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -247,6 +273,12 @@ function AdminPage() {
 					onClick={() => setTab('documents')}
 				>
 					Dokumenter
+				</TabButton>
+				<TabButton
+					active={tab === 'editor'}
+					onClick={() => setTab('editor')}
+				>
+					Redaktør
 				</TabButton>
 			</div>
 
@@ -359,6 +391,18 @@ function AdminPage() {
 					onLinkAdded={() => router.invalidate()}
 					onLinkDeleted={(id) => deleteExternalLink({ data: id })}
 				/>
+			)}
+
+			{tab === 'editor' && (
+				<div className="flex flex-col gap-4">
+					<p className="font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">Forside indhold</p>
+					<PageEditor
+						initialData={pageContent as EditorContent | null}
+						onSave={async (data: OutputData) => {
+							await savePageContent({ data: JSON.stringify({ blocks: data.blocks }) })
+						}}
+					/>
+				</div>
 			)}
 		</main>
 	)

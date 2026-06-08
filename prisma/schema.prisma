@@ -72,3 +72,9 @@ model ContactMessage {
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 }
+
+model PageContent {
+  key       String   @id
+  content   Json
+  updatedAt DateTime @updatedAt
+}
