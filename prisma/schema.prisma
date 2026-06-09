@@ -78,3 +78,10 @@ model PageContent {
   content   Json
   updatedAt DateTime @updatedAt
 }
+
+model BoardMember {
+  id        String   @id @default(uuid())
+  name      String
+  sortOrder Int
+  createdAt DateTime @default(now())
+}

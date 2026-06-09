@@ -3,16 +3,26 @@ import { createServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
 import { prisma } from '#/db'
 
-
 const submitContactMessage = createServerFn({ method: 'POST' })
-	.inputValidator((data: { name: string; email: string; message: string }) => data)
+	.validator((data: { name: string; email: string; message: string }) => data)
 	.handler(async ({ data }) => {
 		await prisma.contactMessage.create({ data })
 	})
 
-export const Route = createFileRoute('/contact')({ component: Contact })
+const getBoardMembers = createServerFn().handler(async () => {
+	return prisma.boardMember.findMany({ orderBy: { sortOrder: 'asc' } })
+})
+
+export const Route = createFileRoute('/contact')({
+	loader: async () => {
+		const boardMembers = await getBoardMembers()
+		return { boardMembers }
+	},
+	component: Contact,
+})
 
 function Contact() {
+	const { boardMembers } = Route.useLoaderData()
 	const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -89,27 +99,21 @@ function Contact() {
 				</form>
 			)}
 
-			<div className="mt-20">
-				<p className="mb-6 font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">Bestyrelsen</p>
-				<ul className="flex flex-col divide-y divide-border/40">
-					{[
-						'Bo Asmus Kjeldgaard',
-						'Jens Christian Refsgaard',
-						'Jens Andersen',
-						'Tommy Abraham Mostrup',
-						'Stig Markager',
-						'Ib Larsen',
-						'Erik Arvin',
-					].map((boardName, i) => (
-						<li key={boardName} className="flex items-center gap-4 py-4">
-							<span className="font-mono text-xs text-[var(--sea-ink-soft)] w-5 shrink-0">
-								{String(i + 1).padStart(2, '0')}
-							</span>
-							<span className="text-lg font-medium text-[var(--sea-ink)]">{boardName}</span>
-						</li>
-					))}
-				</ul>
-			</div>
+			{boardMembers.length > 0 && (
+				<div className="mt-20">
+					<p className="mb-6 font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">Bestyrelsen</p>
+					<ul className="flex flex-col divide-y divide-border/40">
+						{boardMembers.map((member, i) => (
+							<li key={member.id} className="flex items-center gap-4 py-4">
+								<span className="font-mono text-xs text-[var(--sea-ink-soft)] w-5 shrink-0">
+									{String(i + 1).padStart(2, '0')}
+								</span>
+								<span className="text-lg font-medium text-[var(--sea-ink)]">{member.name}</span>
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
 		</main>
 	)
 }

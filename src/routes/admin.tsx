@@ -149,6 +149,50 @@ const savePageContent = createServerFn({ method: 'POST' })
 		})
 	})
 
+const getBoardMembers = createServerFn().handler(async () => {
+	const request = getRequest()
+	const session = await auth.api.getSession({ headers: request.headers })
+	if (!session) throw new Error('Unauthorized')
+	return prisma.boardMember.findMany({ orderBy: { sortOrder: 'asc' } })
+})
+
+const addBoardMember = createServerFn({ method: 'POST' })
+	.validator((name: string) => name)
+	.handler(async ({ data: name }) => {
+		const request = getRequest()
+		const session = await auth.api.getSession({ headers: request.headers })
+		if (!session) throw new Error('Unauthorized')
+		const last = await prisma.boardMember.findFirst({ orderBy: { sortOrder: 'desc' } })
+		await prisma.boardMember.create({ data: { name, sortOrder: (last?.sortOrder ?? 0) + 1 } })
+	})
+
+const deleteBoardMember = createServerFn({ method: 'POST' })
+	.validator((id: string) => id)
+	.handler(async ({ data: id }) => {
+		const request = getRequest()
+		const session = await auth.api.getSession({ headers: request.headers })
+		if (!session) throw new Error('Unauthorized')
+		await prisma.boardMember.delete({ where: { id } })
+	})
+
+const moveBoardMember = createServerFn({ method: 'POST' })
+	.validator((data: { id: string; direction: 'up' | 'down' }) => data)
+	.handler(async ({ data: { id, direction } }) => {
+		const request = getRequest()
+		const session = await auth.api.getSession({ headers: request.headers })
+		if (!session) throw new Error('Unauthorized')
+		const members = await prisma.boardMember.findMany({ orderBy: { sortOrder: 'asc' } })
+		const idx = members.findIndex((m) => m.id === id)
+		const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+		if (swapIdx < 0 || swapIdx >= members.length) return
+		const a = members[idx]
+		const b = members[swapIdx]
+		await prisma.$transaction([
+			prisma.boardMember.update({ where: { id: a.id }, data: { sortOrder: b.sortOrder } }),
+			prisma.boardMember.update({ where: { id: b.id }, data: { sortOrder: a.sortOrder } }),
+		])
+	})
+
 export const Route = createFileRoute('/admin')({
 	beforeLoad: async () => {
 		const session = await getSession()
@@ -158,18 +202,19 @@ export const Route = createFileRoute('/admin')({
 		return { session }
 	},
 	loader: async () => {
-		const [messages, documents, externalLinks, pageContent] = await Promise.all([
+		const [messages, documents, externalLinks, pageContent, boardMembers] = await Promise.all([
 			getMessages(),
 			getDocuments(),
 			getExternalLinks(),
 			getPageContent(),
+			getBoardMembers(),
 		])
-		return { messages, documents, externalLinks, pageContent }
+		return { messages, documents, externalLinks, pageContent, boardMembers }
 	},
 	component: AdminPage,
 })
 
-type Tab = 'dashboard' | 'messages' | 'documents' | 'editor'
+type Tab = 'dashboard' | 'messages' | 'documents' | 'editor' | 'board'
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
 
@@ -185,7 +230,7 @@ function formatDateTime(iso: string) {
 
 function AdminPage() {
 	const { session } = Route.useRouteContext()
-	const { messages: initialMessages, documents: initialDocuments, externalLinks: initialLinks, pageContent } = Route.useLoaderData()
+	const { messages: initialMessages, documents: initialDocuments, externalLinks: initialLinks, pageContent, boardMembers: initialBoardMembers } = Route.useLoaderData()
 	const router = useRouter()
 	const [tab, setTab] = useState<Tab>('dashboard')
 	const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -279,6 +324,12 @@ function AdminPage() {
 					onClick={() => setTab('editor')}
 				>
 					Redaktør
+				</TabButton>
+				<TabButton
+					active={tab === 'board'}
+					onClick={() => setTab('board')}
+				>
+					Bestyrelse
 				</TabButton>
 			</div>
 
@@ -403,6 +454,10 @@ function AdminPage() {
 						}}
 					/>
 				</div>
+			)}
+
+			{tab === 'board' && (
+				<BoardTab initialMembers={initialBoardMembers} />
 			)}
 		</main>
 	)
@@ -580,6 +635,111 @@ function DocumentsTab({
 						</ul>
 					)}
 				</div>
+			</div>
+		</div>
+	)
+}
+
+type BoardMember = { id: string; name: string; sortOrder: number; createdAt: Date }
+
+function BoardTab({ initialMembers }: { initialMembers: BoardMember[] }) {
+	const [members, setMembers] = useState<BoardMember[]>(initialMembers)
+	const [addStatus, setAddStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+
+	const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault()
+		const form = e.currentTarget
+		const name = (new FormData(form).get('name') as string).trim()
+		if (!name) return
+		setAddStatus('loading')
+		try {
+			await addBoardMember({ data: name })
+			const updated = await getBoardMembers()
+			setMembers(updated)
+			setAddStatus('idle')
+			form.reset()
+		} catch {
+			setAddStatus('error')
+		}
+	}
+
+	const handleDelete = async (id: string) => {
+		setMembers((prev) => prev.filter((m) => m.id !== id))
+		await deleteBoardMember({ data: id })
+	}
+
+	const handleMove = async (id: string, direction: 'up' | 'down') => {
+		await moveBoardMember({ data: { id, direction } })
+		const updated = await getBoardMembers()
+		setMembers(updated)
+	}
+
+	return (
+		<div className="flex flex-col gap-6">
+			<div className="rounded-xl border border-border p-6">
+				<p className="mb-4 text-xs font-mono text-[var(--sea-ink-soft)] uppercase tracking-widest">Tilføj medlem</p>
+				<form onSubmit={handleAdd} className="flex gap-3">
+					<input
+						name="name"
+						type="text"
+						placeholder="Fuldt navn"
+						required
+						className="flex-1 rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:bg-secondary/60"
+					/>
+					<button
+						type="submit"
+						disabled={addStatus === 'loading'}
+						className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+					>
+						{addStatus === 'loading' ? 'Tilføjer...' : 'Tilføj'}
+					</button>
+				</form>
+				{addStatus === 'error' && <p className="mt-2 text-sm text-destructive">Noget gik galt. Prøv igen.</p>}
+			</div>
+
+			<div className="rounded-xl border border-border overflow-hidden">
+				{members.length === 0 ? (
+					<p className="py-8 text-center text-sm text-muted-foreground">Ingen medlemmer endnu.</p>
+				) : (
+					<ul className="flex flex-col divide-y divide-border/40">
+						{members.map((member, i) => (
+							<li key={member.id} className="flex items-center gap-4 px-5 py-4">
+								<span className="font-mono text-xs text-muted-foreground w-5 shrink-0">
+									{String(i + 1).padStart(2, '0')}
+								</span>
+								<span className="flex-1 text-sm text-[var(--sea-ink)]">{member.name}</span>
+								<div className="flex items-center gap-1">
+									<button
+										type="button"
+										onClick={() => handleMove(member.id, 'up')}
+										disabled={i === 0}
+										className="p-1 text-muted-foreground/50 hover:text-[var(--sea-ink)] disabled:opacity-20 transition-colors"
+										title="Flyt op"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+									</button>
+									<button
+										type="button"
+										onClick={() => handleMove(member.id, 'down')}
+										disabled={i === members.length - 1}
+										className="p-1 text-muted-foreground/50 hover:text-[var(--sea-ink)] disabled:opacity-20 transition-colors"
+										title="Flyt ned"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+									</button>
+								</div>
+								<button
+									type="button"
+									onClick={() => handleDelete(member.id)}
+									className="text-muted-foreground/50 hover:text-destructive transition-colors"
+									title="Slet"
+								>
+									<TrashIcon />
+								</button>
+							</li>
+						))}
+					</ul>
+				)}
 			</div>
 		</div>
 	)
