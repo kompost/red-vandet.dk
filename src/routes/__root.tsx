@@ -39,8 +39,12 @@ export const Route = createRootRoute({
 function NotFound() {
     return (
         <main className="mx-auto max-w-2xl px-6 py-32 md:px-12 text-center">
-            <p className="mb-2 font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">404</p>
-            <h1 className="text-5xl font-bold text-[var(--sea-ink)]">Siden findes ikke</h1>
+            <p className="mb-2 font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">
+                404
+            </p>
+            <h1 className="text-5xl font-bold text-[var(--sea-ink)]">
+                Siden findes ikke
+            </h1>
         </main>
     )
 }
@@ -56,11 +60,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                 <Header />
                 {children}
                 <Footer />
-                <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-[35deg] w-[150vw] bg-red-600/80 py-4 text-center text-white font-bold tracking-[0.3em] uppercase text-3xl select-none">
-                        Under Konstruktion
-                    </div>
-                </div>
                 <TanStackDevtools
                     config={{
                         position: 'bottom-right',
