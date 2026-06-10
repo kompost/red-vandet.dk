@@ -14,6 +14,7 @@ import { Route as KnowledgeRouteImport } from './routes/knowledge'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiUploadExternalRouteImport } from './routes/api/upload-external'
 import { Route as ApiUploadRouteImport } from './routes/api/upload'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
@@ -42,6 +43,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiUploadExternalRoute = ApiUploadExternalRouteImport.update({
+  id: '/api/upload-external',
+  path: '/api/upload-external',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiUploadRoute = ApiUploadRouteImport.update({
   id: '/api/upload',
   path: '/api/upload',
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/knowledge': typeof KnowledgeRoute
   '/login': typeof LoginRoute
   '/api/upload': typeof ApiUploadRoute
+  '/api/upload-external': typeof ApiUploadExternalRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/knowledge': typeof KnowledgeRoute
   '/login': typeof LoginRoute
   '/api/upload': typeof ApiUploadRoute
+  '/api/upload-external': typeof ApiUploadExternalRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/knowledge': typeof KnowledgeRoute
   '/login': typeof LoginRoute
   '/api/upload': typeof ApiUploadRoute
+  '/api/upload-external': typeof ApiUploadExternalRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/knowledge'
     | '/login'
     | '/api/upload'
+    | '/api/upload-external'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/knowledge'
     | '/login'
     | '/api/upload'
+    | '/api/upload-external'
     | '/api/auth/$'
   id:
     | '__root__'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/knowledge'
     | '/login'
     | '/api/upload'
+    | '/api/upload-external'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
@@ -118,6 +130,7 @@ export interface RootRouteChildren {
   KnowledgeRoute: typeof KnowledgeRoute
   LoginRoute: typeof LoginRoute
   ApiUploadRoute: typeof ApiUploadRoute
+  ApiUploadExternalRoute: typeof ApiUploadExternalRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/upload-external': {
+      id: '/api/upload-external'
+      path: '/api/upload-external'
+      fullPath: '/api/upload-external'
+      preLoaderRoute: typeof ApiUploadExternalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/upload': {
       id: '/api/upload'
       path: '/api/upload'
@@ -182,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   KnowledgeRoute: KnowledgeRoute,
   LoginRoute: LoginRoute,
   ApiUploadRoute: ApiUploadRoute,
+  ApiUploadExternalRoute: ApiUploadExternalRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

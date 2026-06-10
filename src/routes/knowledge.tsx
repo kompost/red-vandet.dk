@@ -1,16 +1,19 @@
 import { readdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import { createFileRoute } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { prisma } from '#/db'
 
 const docsPath = () => process.env.DOCUMENTS_PATH || '/documents'
+const externalDocsPath = () => join(docsPath(), 'external')
 
 const getKnowledgeData = createServerFn().handler(async () => {
-    const [externalLinks, files] = await Promise.all([
+    const [externalLinks, files, externalFiles] = await Promise.all([
         prisma.externalLink.findMany({ orderBy: { createdAt: 'desc' } }),
         readdir(docsPath()).then((f) => f.filter((f) => f.endsWith('.pdf')).sort()).catch(() => []),
+        readdir(externalDocsPath()).then((f) => f.filter((f) => f.endsWith('.pdf')).sort()).catch(() => []),
     ])
-    return { files, externalLinks }
+    return { files, externalFiles, externalLinks }
 })
 
 export const Route = createFileRoute('/knowledge')({
@@ -19,7 +22,7 @@ export const Route = createFileRoute('/knowledge')({
 })
 
 function Knowledge() {
-    const { files, externalLinks } = Route.useLoaderData()
+    const { files, externalFiles, externalLinks } = Route.useLoaderData()
 
     return (
         <main className="mx-auto max-w-3xl px-6 py-32 md:px-12">
@@ -67,10 +70,28 @@ function Knowledge() {
                 <p className="mb-6 font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">
                     Andre relevante udgivelser
                 </p>
-                {externalLinks.length === 0 ? (
-                    <p className="text-[var(--sea-ink-soft)]">Ingen eksterne links tilgængelige endnu.</p>
+                {externalFiles.length === 0 && externalLinks.length === 0 ? (
+                    <p className="text-[var(--sea-ink-soft)]">Ingen udgivelser tilgængelige endnu.</p>
                 ) : (
                     <ul className="flex flex-col divide-y divide-border/40">
+                        {externalFiles.map((file, i) => (
+                            <li key={file}>
+                                <a
+                                    href={`/documents/external/${file}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="group flex items-center gap-4 py-5 transition-colors hover:text-primary"
+                                >
+                                    <span className="font-mono text-xs text-[var(--sea-ink-soft)] w-5 shrink-0">
+                                        {String(i + 1).padStart(2, '0')}
+                                    </span>
+                                    <span className="flex-1 text-lg font-medium text-[var(--sea-ink)] group-hover:text-primary transition-colors">
+                                        {file.replace(/_/g, ' ').replace(/\.pdf$/i, '')}
+                                    </span>
+                                    <span className="font-mono text-xs text-[var(--sea-ink-soft)] uppercase">PDF</span>
+                                </a>
+                            </li>
+                        ))}
                         {externalLinks.map((link, i) => (
                             <li key={link.id}>
                                 <a
@@ -80,7 +101,7 @@ function Knowledge() {
                                     className="group flex items-center gap-4 py-5 transition-colors hover:text-primary"
                                 >
                                     <span className="font-mono text-xs text-[var(--sea-ink-soft)] w-5 shrink-0">
-                                        {String(i + 1).padStart(2, '0')}
+                                        {String(externalFiles.length + i + 1).padStart(2, '0')}
                                     </span>
                                     <span className="flex-1 text-lg font-medium text-[var(--sea-ink)] group-hover:text-primary transition-colors">
                                         {link.title}

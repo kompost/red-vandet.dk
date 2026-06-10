@@ -70,6 +70,7 @@ const changePassword = createServerFn({ method: 'POST' })
 	})
 
 const docsPath = () => process.env.DOCUMENTS_PATH || '/documents'
+const externalDocsPath = () => join(docsPath(), 'external')
 
 const getDocuments = createServerFn().handler(async () => {
 	const request = getRequest()
@@ -91,6 +92,28 @@ const deleteDocument = createServerFn({ method: 'POST' })
 		if (!session) throw new Error('Unauthorized')
 		if (filename.includes('/') || filename.includes('..')) throw new Error('Invalid filename')
 		await unlink(join(docsPath(), filename))
+	})
+
+const getExternalDocuments = createServerFn().handler(async () => {
+	const request = getRequest()
+	const session = await auth.api.getSession({ headers: request.headers })
+	if (!session) throw new Error('Unauthorized')
+	try {
+		const files = await readdir(externalDocsPath())
+		return files.filter((f) => f.endsWith('.pdf')).sort()
+	} catch {
+		return []
+	}
+})
+
+const deleteExternalDocument = createServerFn({ method: 'POST' })
+	.validator((filename: string) => filename)
+	.handler(async ({ data: filename }) => {
+		const request = getRequest()
+		const session = await auth.api.getSession({ headers: request.headers })
+		if (!session) throw new Error('Unauthorized')
+		if (filename.includes('/') || filename.includes('..')) throw new Error('Invalid filename')
+		await unlink(join(externalDocsPath(), filename))
 	})
 
 const getExternalLinks = createServerFn().handler(async () => {
@@ -202,14 +225,15 @@ export const Route = createFileRoute('/admin')({
 		return { session }
 	},
 	loader: async () => {
-		const [messages, documents, externalLinks, pageContent, boardMembers] = await Promise.all([
+		const [messages, documents, externalDocuments, externalLinks, pageContent, boardMembers] = await Promise.all([
 			getMessages(),
 			getDocuments(),
+			getExternalDocuments(),
 			getExternalLinks(),
 			getPageContent(),
 			getBoardMembers(),
 		])
-		return { messages, documents, externalLinks, pageContent, boardMembers }
+		return { messages, documents, externalDocuments, externalLinks, pageContent, boardMembers }
 	},
 	component: AdminPage,
 })
@@ -230,7 +254,7 @@ function formatDateTime(iso: string) {
 
 function AdminPage() {
 	const { session } = Route.useRouteContext()
-	const { messages: initialMessages, documents: initialDocuments, externalLinks: initialLinks, pageContent, boardMembers: initialBoardMembers } = Route.useLoaderData()
+	const { messages: initialMessages, documents: initialDocuments, externalDocuments: initialExternalDocs, externalLinks: initialLinks, pageContent, boardMembers: initialBoardMembers } = Route.useLoaderData()
 	const router = useRouter()
 	const [tab, setTab] = useState<Tab>('dashboard')
 	const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -438,6 +462,9 @@ function AdminPage() {
 						await deleteDocument({ data: filename })
 					}}
 					onUploaded={() => router.invalidate()}
+					initialExternalDocs={initialExternalDocs}
+					onExternalDocDeleted={(filename) => deleteExternalDocument({ data: filename })}
+					onExternalDocUploaded={() => router.invalidate()}
 					initialLinks={initialLinks}
 					onLinkAdded={() => router.invalidate()}
 					onLinkDeleted={(id) => deleteExternalLink({ data: id })}
@@ -470,6 +497,9 @@ function DocumentsTab({
 	deletedDocs,
 	onDelete,
 	onUploaded,
+	initialExternalDocs,
+	onExternalDocDeleted,
+	onExternalDocUploaded,
 	initialLinks,
 	onLinkAdded,
 	onLinkDeleted,
@@ -478,13 +508,18 @@ function DocumentsTab({
 	deletedDocs: Set<string>
 	onDelete: (filename: string) => void
 	onUploaded: () => void
+	initialExternalDocs: string[]
+	onExternalDocDeleted: (filename: string) => void
+	onExternalDocUploaded: () => void
 	initialLinks: ExternalLink[]
 	onLinkAdded: () => void
 	onLinkDeleted: (id: string) => void
 }) {
 	const [uploadStatus, setUploadStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+	const [externalUploadStatus, setExternalUploadStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 	const [linkStatus, setLinkStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 	const [deletedLinkIds, setDeletedLinkIds] = useState<Set<string>>(new Set())
+	const [deletedExternalDocs, setDeletedExternalDocs] = useState<Set<string>>(new Set())
 
 	const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
@@ -522,12 +557,36 @@ function DocumentsTab({
 		}
 	}
 
+	const handleExternalUpload = async (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault()
+		const form = e.currentTarget
+		const fd = new FormData(form)
+		const file = fd.get('file') as File | null
+		if (!file || file.size === 0) return
+		setExternalUploadStatus('loading')
+		try {
+			const res = await fetch('/api/upload-external', { method: 'POST', body: fd })
+			if (!res.ok) throw new Error()
+			setExternalUploadStatus('success')
+			form.reset()
+			onExternalDocUploaded()
+		} catch {
+			setExternalUploadStatus('error')
+		}
+	}
+
+	const handleDeleteExternalDoc = async (filename: string) => {
+		setDeletedExternalDocs((prev) => new Set(prev).add(filename))
+		await onExternalDocDeleted(filename)
+	}
+
 	const handleDeleteLink = async (id: string) => {
 		setDeletedLinkIds((prev) => new Set(prev).add(id))
 		await onLinkDeleted(id)
 	}
 
 	const documents = initialDocuments.filter((f) => !deletedDocs.has(f))
+	const externalDocs = initialExternalDocs.filter((f) => !deletedExternalDocs.has(f))
 	const links = initialLinks.filter((l) => !deletedLinkIds.has(l.id))
 
 	return (
@@ -587,6 +646,28 @@ function DocumentsTab({
 				<p className="font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">Andre relevante udgivelser</p>
 
 				<div className="rounded-xl border border-border p-6">
+					<p className="mb-4 text-xs font-medium text-[var(--sea-ink)]">Upload PDF</p>
+					<form onSubmit={handleExternalUpload} className="flex flex-col gap-4">
+						<input
+							name="file"
+							type="file"
+							accept=".pdf"
+							required
+							className="text-sm text-[var(--sea-ink)] file:mr-4 file:rounded-lg file:border-0 file:bg-secondary file:px-4 file:py-2 file:text-sm file:font-medium file:text-[var(--sea-ink)] hover:file:bg-secondary/80"
+						/>
+						{externalUploadStatus === 'error' && <p className="text-sm text-destructive">Upload fejlede. Prøv igen.</p>}
+						{externalUploadStatus === 'success' && <p className="text-sm text-green-600 dark:text-green-400">Fil uploadet.</p>}
+						<button
+							type="submit"
+							disabled={externalUploadStatus === 'loading'}
+							className="self-start rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+						>
+							{externalUploadStatus === 'loading' ? 'Uploader...' : 'Upload'}
+						</button>
+					</form>
+				</div>
+
+				<div className="rounded-xl border border-border p-6">
 					<p className="mb-4 text-xs font-medium text-[var(--sea-ink)]">Tilføj eksternt link</p>
 					<form onSubmit={handleAddLink} className="flex flex-col gap-3">
 						<input
@@ -616,14 +697,28 @@ function DocumentsTab({
 				</div>
 
 				<div className="rounded-xl border border-border overflow-hidden">
-					{links.length === 0 ? (
-						<p className="py-8 text-center text-sm text-muted-foreground">Ingen eksterne links endnu.</p>
+					{externalDocs.length === 0 && links.length === 0 ? (
+						<p className="py-8 text-center text-sm text-muted-foreground">Ingen filer eller links endnu.</p>
 					) : (
 						<ul className="flex flex-col divide-y divide-border/40">
+							{externalDocs.map((file, i) => (
+								<li key={file} className="flex items-center gap-4 px-5 py-4">
+									<span className="font-mono text-xs text-muted-foreground w-5 shrink-0">
+										{String(i + 1).padStart(2, '0')}
+									</span>
+									<span className="flex-1 text-sm text-[var(--sea-ink)] truncate">
+										{file.replace(/_/g, ' ').replace(/\.pdf$/i, '')}
+									</span>
+									<a href={`/documents/external/${file}`} target="_blank" rel="noreferrer" className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors">PDF</a>
+									<button type="button" onClick={() => handleDeleteExternalDoc(file)} className="text-muted-foreground/50 hover:text-destructive transition-colors" title="Slet">
+										<TrashIcon />
+									</button>
+								</li>
+							))}
 							{links.map((link, i) => (
 								<li key={link.id} className="flex items-center gap-4 px-5 py-4">
 									<span className="font-mono text-xs text-muted-foreground w-5 shrink-0">
-										{String(i + 1).padStart(2, '0')}
+										{String(externalDocs.length + i + 1).padStart(2, '0')}
 									</span>
 									<span className="flex-1 text-sm text-[var(--sea-ink)] truncate">{link.title}</span>
 									<a href={link.url} target="_blank" rel="noreferrer" className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors truncate max-w-[160px]">{link.url}</a>
