@@ -12,3 +12,7 @@ dist-ssr
 __unconfig*
 todos.json
 src/generated/
+
+# Locally uploaded documents (keep the folder itself)
+public/documents/*
+!public/documents/.gitkeep
