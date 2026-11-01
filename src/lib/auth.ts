@@ -11,5 +11,10 @@ export const auth = betterAuth({
         enabled: true,
         disableSignUp: true,
     },
+    advanced: {
+        // Better Auth 1.7+ ignores X-Forwarded-* unless opted in. The app is only
+        // reachable through Caddy, which sets these headers, so trust them.
+        trustedProxyHeaders: true,
+    },
     plugins: [tanstackStartCookies()],
 })
