@@ -79,6 +79,17 @@ model PageContent {
   updatedAt DateTime @updatedAt
 }
 
+/// Manual ordering of items on the knowledge page.
+/// section: "own" (key = PDF filename) or "external" (key = "file:<filename>" or "link:<ExternalLink id>").
+/// Items without a row are shown after the ordered ones.
+model DocumentOrder {
+  section   String
+  key       String
+  sortOrder Int
+
+  @@id([section, key])
+}
+
 model BoardMember {
   id        String   @id @default(uuid())
   name      String

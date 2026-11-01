@@ -4,11 +4,19 @@ import { getRequest } from '@tanstack/react-start/server'
 import { randomBytes, scryptSync } from 'node:crypto'
 import { unlink } from 'node:fs/promises'
 import { join } from 'node:path'
-import { readdir } from 'node:fs/promises'
 import { useState } from 'react'
 import { prisma } from '#/db'
 import { auth } from '#/lib/auth'
 import { authClient } from '#/lib/auth-client'
+import {
+	type DocumentSection,
+	type ExternalItem,
+	docsPath,
+	externalDocsPath,
+	listExternalItems,
+	listOwnDocuments,
+	moveDocument,
+} from '#/lib/documents'
 import { PageEditor } from '#/components/PageEditor'
 import type { EditorContent } from '#/components/PageBlockRenderer'
 import type { OutputData } from '@editorjs/editorjs'
@@ -69,20 +77,22 @@ const changePassword = createServerFn({ method: 'POST' })
 		})
 	})
 
-const docsPath = () => process.env.DOCUMENTS_PATH || '/documents'
-const externalDocsPath = () => join(docsPath(), 'external')
-
 const getDocuments = createServerFn().handler(async () => {
 	const request = getRequest()
 	const session = await auth.api.getSession({ headers: request.headers })
 	if (!session) throw new Error('Unauthorized')
-	try {
-		const files = await readdir(docsPath())
-		return files.filter((f) => f.endsWith('.pdf')).sort()
-	} catch {
-		return []
-	}
+	return listOwnDocuments()
 })
+
+const moveDocumentItem = createServerFn({ method: 'POST' })
+	.validator((data: { section: DocumentSection; key: string; direction: 'up' | 'down' }) => data)
+	.handler(async ({ data: { section, key, direction } }) => {
+		const request = getRequest()
+		const session = await auth.api.getSession({ headers: request.headers })
+		if (!session) throw new Error('Unauthorized')
+		if (section !== 'own' && section !== 'external') throw new Error('Invalid section')
+		await moveDocument(section, key, direction)
+	})
 
 const deleteDocument = createServerFn({ method: 'POST' })
 	.validator((filename: string) => filename)
@@ -94,16 +104,11 @@ const deleteDocument = createServerFn({ method: 'POST' })
 		await unlink(join(docsPath(), filename))
 	})
 
-const getExternalDocuments = createServerFn().handler(async () => {
+const getExternalItems = createServerFn().handler(async () => {
 	const request = getRequest()
 	const session = await auth.api.getSession({ headers: request.headers })
 	if (!session) throw new Error('Unauthorized')
-	try {
-		const files = await readdir(externalDocsPath())
-		return files.filter((f) => f.endsWith('.pdf')).sort()
-	} catch {
-		return []
-	}
+	return listExternalItems()
 })
 
 const deleteExternalDocument = createServerFn({ method: 'POST' })
@@ -115,13 +120,6 @@ const deleteExternalDocument = createServerFn({ method: 'POST' })
 		if (filename.includes('/') || filename.includes('..')) throw new Error('Invalid filename')
 		await unlink(join(externalDocsPath(), filename))
 	})
-
-const getExternalLinks = createServerFn().handler(async () => {
-	const request = getRequest()
-	const session = await auth.api.getSession({ headers: request.headers })
-	if (!session) throw new Error('Unauthorized')
-	return prisma.externalLink.findMany({ orderBy: { createdAt: 'desc' } })
-})
 
 const addExternalLink = createServerFn({ method: 'POST' })
 	.validator((data: { title: string; url: string }) => data)
@@ -225,15 +223,14 @@ export const Route = createFileRoute('/admin')({
 		return { session }
 	},
 	loader: async () => {
-		const [messages, documents, externalDocuments, externalLinks, pageContent, boardMembers] = await Promise.all([
+		const [messages, documents, externalItems, pageContent, boardMembers] = await Promise.all([
 			getMessages(),
 			getDocuments(),
-			getExternalDocuments(),
-			getExternalLinks(),
+			getExternalItems(),
 			getPageContent(),
 			getBoardMembers(),
 		])
-		return { messages, documents, externalDocuments, externalLinks, pageContent, boardMembers }
+		return { messages, documents, externalItems, pageContent, boardMembers }
 	},
 	component: AdminPage,
 })
@@ -254,7 +251,7 @@ function formatDateTime(iso: string) {
 
 function AdminPage() {
 	const { session } = Route.useRouteContext()
-	const { messages: initialMessages, documents: initialDocuments, externalDocuments: initialExternalDocs, externalLinks: initialLinks, pageContent, boardMembers: initialBoardMembers } = Route.useLoaderData()
+	const { messages: initialMessages, documents: initialDocuments, externalItems: initialExternalItems, pageContent, boardMembers: initialBoardMembers } = Route.useLoaderData()
 	const router = useRouter()
 	const [tab, setTab] = useState<Tab>('dashboard')
 	const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -462,12 +459,15 @@ function AdminPage() {
 						await deleteDocument({ data: filename })
 					}}
 					onUploaded={() => router.invalidate()}
-					initialExternalDocs={initialExternalDocs}
+					initialExternalItems={initialExternalItems}
 					onExternalDocDeleted={(filename) => deleteExternalDocument({ data: filename })}
 					onExternalDocUploaded={() => router.invalidate()}
-					initialLinks={initialLinks}
 					onLinkAdded={() => router.invalidate()}
 					onLinkDeleted={(id) => deleteExternalLink({ data: id })}
+					onMove={async (section, key, direction) => {
+						await moveDocumentItem({ data: { section, key, direction } })
+						await router.invalidate()
+					}}
 				/>
 			)}
 
@@ -490,30 +490,28 @@ function AdminPage() {
 	)
 }
 
-type ExternalLink = { id: string; title: string; url: string; createdAt: Date }
-
 function DocumentsTab({
 	initialDocuments,
 	deletedDocs,
 	onDelete,
 	onUploaded,
-	initialExternalDocs,
+	initialExternalItems,
 	onExternalDocDeleted,
 	onExternalDocUploaded,
-	initialLinks,
 	onLinkAdded,
 	onLinkDeleted,
+	onMove,
 }: {
 	initialDocuments: string[]
 	deletedDocs: Set<string>
 	onDelete: (filename: string) => void
 	onUploaded: () => void
-	initialExternalDocs: string[]
+	initialExternalItems: ExternalItem[]
 	onExternalDocDeleted: (filename: string) => void
 	onExternalDocUploaded: () => void
-	initialLinks: ExternalLink[]
 	onLinkAdded: () => void
 	onLinkDeleted: (id: string) => void
+	onMove: (section: DocumentSection, key: string, direction: 'up' | 'down') => Promise<void>
 }) {
 	const [uploadStatus, setUploadStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 	const [externalUploadStatus, setExternalUploadStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -586,8 +584,9 @@ function DocumentsTab({
 	}
 
 	const documents = initialDocuments.filter((f) => !deletedDocs.has(f))
-	const externalDocs = initialExternalDocs.filter((f) => !deletedExternalDocs.has(f))
-	const links = initialLinks.filter((l) => !deletedLinkIds.has(l.id))
+	const externalItems = initialExternalItems.filter((item) =>
+		item.type === 'file' ? !deletedExternalDocs.has(item.filename) : !deletedLinkIds.has(item.id),
+	)
 
 	return (
 		<div className="flex flex-col gap-10">
@@ -631,6 +630,11 @@ function DocumentsTab({
 										{file.replace(/_/g, ' ').replace(/\.pdf$/i, '')}
 									</span>
 									<a href={`/documents/${file}`} target="_blank" rel="noreferrer" className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors">PDF</a>
+									<MoveButtons
+										isFirst={i === 0}
+										isLast={i === documents.length - 1}
+										onMove={(direction) => onMove('own', file, direction)}
+									/>
 									<button type="button" onClick={() => onDelete(file)} className="text-muted-foreground/50 hover:text-destructive transition-colors" title="Slet">
 										<TrashIcon />
 									</button>
@@ -697,32 +701,39 @@ function DocumentsTab({
 				</div>
 
 				<div className="rounded-xl border border-border overflow-hidden">
-					{externalDocs.length === 0 && links.length === 0 ? (
+					{externalItems.length === 0 ? (
 						<p className="py-8 text-center text-sm text-muted-foreground">Ingen filer eller links endnu.</p>
 					) : (
 						<ul className="flex flex-col divide-y divide-border/40">
-							{externalDocs.map((file, i) => (
-								<li key={file} className="flex items-center gap-4 px-5 py-4">
+							{externalItems.map((item, i) => (
+								<li key={item.key} className="flex items-center gap-4 px-5 py-4">
 									<span className="font-mono text-xs text-muted-foreground w-5 shrink-0">
 										{String(i + 1).padStart(2, '0')}
 									</span>
-									<span className="flex-1 text-sm text-[var(--sea-ink)] truncate">
-										{file.replace(/_/g, ' ').replace(/\.pdf$/i, '')}
-									</span>
-									<a href={`/documents/external/${file}`} target="_blank" rel="noreferrer" className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors">PDF</a>
-									<button type="button" onClick={() => handleDeleteExternalDoc(file)} className="text-muted-foreground/50 hover:text-destructive transition-colors" title="Slet">
-										<TrashIcon />
-									</button>
-								</li>
-							))}
-							{links.map((link, i) => (
-								<li key={link.id} className="flex items-center gap-4 px-5 py-4">
-									<span className="font-mono text-xs text-muted-foreground w-5 shrink-0">
-										{String(externalDocs.length + i + 1).padStart(2, '0')}
-									</span>
-									<span className="flex-1 text-sm text-[var(--sea-ink)] truncate">{link.title}</span>
-									<a href={link.url} target="_blank" rel="noreferrer" className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors truncate max-w-[160px]">{link.url}</a>
-									<button type="button" onClick={() => handleDeleteLink(link.id)} className="text-muted-foreground/50 hover:text-destructive transition-colors" title="Slet">
+									{item.type === 'file' ? (
+										<>
+											<span className="flex-1 text-sm text-[var(--sea-ink)] truncate">
+												{item.filename.replace(/_/g, ' ').replace(/\.pdf$/i, '')}
+											</span>
+											<a href={`/documents/external/${item.filename}`} target="_blank" rel="noreferrer" className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors">PDF</a>
+										</>
+									) : (
+										<>
+											<span className="flex-1 text-sm text-[var(--sea-ink)] truncate">{item.title}</span>
+											<a href={item.url} target="_blank" rel="noreferrer" className="font-mono text-xs text-muted-foreground hover:text-primary transition-colors truncate max-w-[160px]">{item.url}</a>
+										</>
+									)}
+									<MoveButtons
+										isFirst={i === 0}
+										isLast={i === externalItems.length - 1}
+										onMove={(direction) => onMove('external', item.key, direction)}
+									/>
+									<button
+										type="button"
+										onClick={() => (item.type === 'file' ? handleDeleteExternalDoc(item.filename) : handleDeleteLink(item.id))}
+										className="text-muted-foreground/50 hover:text-destructive transition-colors"
+										title="Slet"
+									>
 										<TrashIcon />
 									</button>
 								</li>
@@ -803,26 +814,11 @@ function BoardTab({ initialMembers }: { initialMembers: BoardMember[] }) {
 									{String(i + 1).padStart(2, '0')}
 								</span>
 								<span className="flex-1 text-sm text-[var(--sea-ink)]">{member.name}</span>
-								<div className="flex items-center gap-1">
-									<button
-										type="button"
-										onClick={() => handleMove(member.id, 'up')}
-										disabled={i === 0}
-										className="p-1 text-muted-foreground/50 hover:text-[var(--sea-ink)] disabled:opacity-20 transition-colors"
-										title="Flyt op"
-									>
-										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
-									</button>
-									<button
-										type="button"
-										onClick={() => handleMove(member.id, 'down')}
-										disabled={i === members.length - 1}
-										className="p-1 text-muted-foreground/50 hover:text-[var(--sea-ink)] disabled:opacity-20 transition-colors"
-										title="Flyt ned"
-									>
-										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-									</button>
-								</div>
+								<MoveButtons
+									isFirst={i === 0}
+									isLast={i === members.length - 1}
+									onMove={(direction) => handleMove(member.id, direction)}
+								/>
 								<button
 									type="button"
 									onClick={() => handleDelete(member.id)}
@@ -836,6 +832,48 @@ function BoardTab({ initialMembers }: { initialMembers: BoardMember[] }) {
 					</ul>
 				)}
 			</div>
+		</div>
+	)
+}
+
+function MoveButtons({
+	isFirst,
+	isLast,
+	onMove,
+}: {
+	isFirst: boolean
+	isLast: boolean
+	onMove: (direction: 'up' | 'down') => Promise<void>
+}) {
+	const [busy, setBusy] = useState(false)
+	const move = async (direction: 'up' | 'down') => {
+		setBusy(true)
+		try {
+			await onMove(direction)
+		} finally {
+			setBusy(false)
+		}
+	}
+	return (
+		<div className="flex items-center gap-1">
+			<button
+				type="button"
+				onClick={() => move('up')}
+				disabled={isFirst || busy}
+				className="p-1 text-muted-foreground/50 hover:text-[var(--sea-ink)] disabled:opacity-20 transition-colors"
+				title="Flyt op"
+			>
+				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+			</button>
+			<button
+				type="button"
+				onClick={() => move('down')}
+				disabled={isLast || busy}
+				className="p-1 text-muted-foreground/50 hover:text-[var(--sea-ink)] disabled:opacity-20 transition-colors"
+				title="Flyt ned"
+			>
+				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+			</button>
 		</div>
 	)
 }

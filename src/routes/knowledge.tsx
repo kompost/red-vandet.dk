@@ -1,19 +1,10 @@
-import { readdir } from 'node:fs/promises'
-import { join } from 'node:path'
 import { createFileRoute } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
-import { prisma } from '#/db'
-
-const docsPath = () => process.env.DOCUMENTS_PATH || '/documents'
-const externalDocsPath = () => join(docsPath(), 'external')
+import { listExternalItems, listOwnDocuments } from '#/lib/documents'
 
 const getKnowledgeData = createServerFn().handler(async () => {
-    const [externalLinks, files, externalFiles] = await Promise.all([
-        prisma.externalLink.findMany({ orderBy: { createdAt: 'desc' } }),
-        readdir(docsPath()).then((f) => f.filter((f) => f.endsWith('.pdf')).sort()).catch(() => []),
-        readdir(externalDocsPath()).then((f) => f.filter((f) => f.endsWith('.pdf')).sort()).catch(() => []),
-    ])
-    return { files, externalFiles, externalLinks }
+    const [files, externalItems] = await Promise.all([listOwnDocuments(), listExternalItems()])
+    return { files, externalItems }
 })
 
 export const Route = createFileRoute('/knowledge')({
@@ -22,7 +13,7 @@ export const Route = createFileRoute('/knowledge')({
 })
 
 function Knowledge() {
-    const { files, externalFiles, externalLinks } = Route.useLoaderData()
+    const { files, externalItems } = Route.useLoaderData()
 
     return (
         <main className="mx-auto max-w-3xl px-6 py-32 md:px-12">
@@ -70,14 +61,14 @@ function Knowledge() {
                 <p className="mb-6 font-mono text-xs tracking-widest text-[var(--sea-ink-soft)] uppercase">
                     Andre relevante udgivelser
                 </p>
-                {externalFiles.length === 0 && externalLinks.length === 0 ? (
+                {externalItems.length === 0 ? (
                     <p className="text-[var(--sea-ink-soft)]">Ingen udgivelser tilgængelige endnu.</p>
                 ) : (
                     <ul className="flex flex-col divide-y divide-border/40">
-                        {externalFiles.map((file, i) => (
-                            <li key={file}>
+                        {externalItems.map((item, i) => (
+                            <li key={item.key}>
                                 <a
-                                    href={`/documents/external/${file}`}
+                                    href={item.type === 'file' ? `/documents/external/${item.filename}` : item.url}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="group flex items-center gap-4 py-5 transition-colors hover:text-primary"
@@ -86,27 +77,11 @@ function Knowledge() {
                                         {String(i + 1).padStart(2, '0')}
                                     </span>
                                     <span className="flex-1 text-lg font-medium text-[var(--sea-ink)] group-hover:text-primary transition-colors">
-                                        {file.replace(/_/g, ' ').replace(/\.pdf$/i, '')}
+                                        {item.type === 'file' ? item.filename.replace(/_/g, ' ').replace(/\.pdf$/i, '') : item.title}
                                     </span>
-                                    <span className="font-mono text-xs text-[var(--sea-ink-soft)] uppercase">PDF</span>
-                                </a>
-                            </li>
-                        ))}
-                        {externalLinks.map((link, i) => (
-                            <li key={link.id}>
-                                <a
-                                    href={link.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="group flex items-center gap-4 py-5 transition-colors hover:text-primary"
-                                >
-                                    <span className="font-mono text-xs text-[var(--sea-ink-soft)] w-5 shrink-0">
-                                        {String(externalFiles.length + i + 1).padStart(2, '0')}
+                                    <span className="font-mono text-xs text-[var(--sea-ink-soft)] uppercase">
+                                        {item.type === 'file' ? 'PDF' : '↗'}
                                     </span>
-                                    <span className="flex-1 text-lg font-medium text-[var(--sea-ink)] group-hover:text-primary transition-colors">
-                                        {link.title}
-                                    </span>
-                                    <span className="font-mono text-xs text-[var(--sea-ink-soft)] uppercase">↗</span>
                                 </a>
                             </li>
                         ))}
