@@ -40,7 +40,7 @@ async function main() {
 			accounts: {
 				create: {
 					id: crypto.randomUUID(),
-					accountId: email,
+					accountId: userId,
 					providerId: 'credential',
 					password: hashPassword(password),
 					createdAt: now,
