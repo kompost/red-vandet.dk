@@ -76,7 +76,7 @@ export default function FloatingNav() {
                 <div className="flex items-center justify-between px-6 md:px-12 py-5">
                     <Link to="/" className="flex items-center gap-3">
                         <img
-                            src="rv-logo.png"
+                            src="logo.svg"
                             alt="Red Vandet"
                             className="h-15 w-auto"
                         />
@@ -131,7 +131,7 @@ export default function FloatingNav() {
                                 onClick={() => setMenuOpen(false)}
                             >
                                 <img
-                                    src="rv-logo.png"
+                                    src="logo.svg"
                                     alt="Red Vandet"
                                     className="h-15 w-auto"
                                 />
